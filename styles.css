@@ -67,7 +67,8 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 @media (max-width: 760px) {
   .nav { display: none; }
   .search-mini { display: grid; margin-inline-start: auto; }
-  .logo small { display: none; }
+  .logo { font-size: 1rem; gap: 8px; }
+  .logo-mark { width: 30px; height: 30px; }
 }
 
 /* hero */
