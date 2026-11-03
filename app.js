@@ -340,12 +340,11 @@ function route() {
   else if (h === 'library') { html = viewLibrary(); nav = 'library'; }
   else if (h === 'mine') { html = viewMine(); nav = 'mine'; }
 
-  else if (h === 'search') html = viewSearch(lastQuery);
+  else if (h === 'search') { html = viewSearch(lastQuery); nav = 'search'; }
   else if (h.startsWith('s-')) { html = viewSection(h.slice(2)); nav = 'library'; }
   else if (h.startsWith('c-')) { html = viewCat(Number(h.slice(2))); nav = 'library'; }
   else html = notFound();
   app.innerHTML = html;
-  document.querySelectorAll('[data-nav]').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === nav) || a.setAttribute('aria-current', a.dataset.nav === nav ? 'page' : 'false'));
   document.querySelectorAll('[data-nav]').forEach(a => a.dataset.nav === nav ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   markPlaying();
   if (h === 'search') { const i = $('#q2'); i && (i.focus(), i.setSelectionRange(i.value.length, i.value.length)); }
@@ -370,7 +369,7 @@ function load(autoplay) {
   const l = queue[qi]; if (!l) return;
   if (cur && audio.currentTime > 5) { resume[cur[0]] = audio.currentTime; store.set('resume', resume); }
   cur = l; const v = lessonIndex.get(l[0]);
-  player.hidden = false; $('#pErr').hidden = true;
+  player.hidden = false; document.body.classList.add('has-player'); $('#pErr').hidden = true;
   $('#pTitle').textContent = lessonTitle(l[1]);
   const where = v && v.cat ? C[v.cat] : null;
   $('#pSeries').textContent = where ? where.t : (v && v.sec ? secByKey[v.sec].t : '');
@@ -448,16 +447,41 @@ document.addEventListener('input', e => {
 document.addEventListener('keydown', e => {
   if (e.key === '/' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); const i = $('#q') || $('#q2'); if (i) i.focus(); else location.hash = 'search'; }
 });
-$('#theme').onclick = () => {
+const toggleTheme = () => {
   const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
   r.dataset.theme = dark ? 'light' : 'dark'; store.set('theme', r.dataset.theme);
 };
+$('#theme').onclick = toggleTheme;
+$('#theme2').onclick = toggleTheme;
+
+// ---------- player close ----------
+$('#pClose').onclick = () => {
+  if (cur && audio.currentTime > 5) { resume[cur[0]] = audio.currentTime; store.set('resume', resume); }
+  audio.pause(); audio.removeAttribute('src'); audio.load();
+  cur = null; queue = []; qi = -1;
+  player.hidden = true; document.body.classList.remove('has-player');
+  store.set('last', null); markPlaying();
+};
+
+// ---------- mobile menu ----------
+const drawer = $('#drawer'), scrim = $('#scrim'), menuBtn = $('#menuBtn');
+function setMenu(open) {
+  drawer.hidden = !open; scrim.hidden = !open; menuBtn.setAttribute('aria-expanded', open);
+  document.body.classList.toggle('no-scroll', open);
+  if (open) $('#menuClose').focus(); else if (document.activeElement && drawer.contains(document.activeElement)) menuBtn.focus();
+}
+menuBtn.onclick = () => setMenu(true);
+$('#menuClose').onclick = () => setMenu(false);
+scrim.onclick = () => setMenu(false);
+drawer.addEventListener('click', e => { if (e.target.closest('a')) setMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) setMenu(false); });
 { const t = store.get('theme', null); if (t) document.documentElement.dataset.theme = t; }
 window.addEventListener('hashchange', route);
 
 // ---------- boot ----------
 function boot(data) {
   prep(data);
+  $('#drawerSections').innerHTML = S.filter(s => s.n).map(s => `<a href="#s-${s.key}"><span>${esc(s.t)}</span><span class="num">${N(s.n)}</span></a>`).join('');
   if (data.built) $('#built').textContent = 'آخر تحديث للفهرس: ' + new Date(data.built).toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: 'long', day: 'numeric' });
   route();
   const last = store.get('last', null);
