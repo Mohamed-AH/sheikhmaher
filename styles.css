@@ -116,6 +116,8 @@ section.block { padding-block: 40px 8px; }
 .step h3 { font-family: var(--f-book); font-size: 1.2rem; font-weight: 700; line-height: 1.4; }
 .step p { margin: 2px 0 0; color: var(--muted); font-size: .85rem; }
 .step:hover { border-color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chips span { padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--ink, inherit); font-size: .8rem; line-height: 1.6; white-space: nowrap; }
 
 /* series list */
 .series-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
@@ -172,6 +174,7 @@ section.block { padding-block: 40px 8px; }
 .play svg { width: 16px; height: 16px; }
 .lesson .t { font-size: .97rem; line-height: 1.55; overflow-wrap: anywhere; }
 .lesson .sub { color: var(--muted); font-size: .78rem; display: flex; gap: 10px; flex-wrap: wrap; }
+.lesson .part { color: var(--muted); font-size: .85em; white-space: nowrap; }
 .lesson .acts { display: flex; gap: 4px; }
 .lesson .acts a, .lesson .acts button { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
 .lesson .acts a:hover, .lesson .acts button:hover { background: var(--surface-2); color: var(--ink); }
@@ -271,3 +274,17 @@ body.no-scroll { overflow: hidden; }
   footer.site { margin-top: 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
+
+/* ---------- accessibility fixes (audit) ---------- */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip { position: absolute; inset-inline-start: 12px; top: -60px; z-index: 50; background: var(--brand); color: var(--surface); padding: 8px 14px; border-radius: 10px; }
+.skip:focus { top: calc(env(safe-area-inset-top, 0px) + 8px); }
+main:focus { outline: none; }
+h1[tabindex="-1"]:focus { outline: none; }
+footer.site a, .lede a, .empty-note a, .page-head p a, .block p a { text-decoration: underline; text-underline-offset: 3px; }
+.crumbs a, .crumbs span { display: inline-flex; align-items: center; min-height: 24px; }
+.chapters a.zero { opacity: 1; color: var(--muted); }
+.player .info a#pSeries { min-height: 24px; display: flex; align-items: center; }
+.player input[type=range] { height: 24px; }
+.lesson.nofile .play { cursor: default; opacity: .35; }
+.lesson.nofile .sub { font-style: normal; }

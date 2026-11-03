@@ -8,10 +8,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Readex+Pro:wght@300;400;500;600&family=Reem+Kufi:wght@500;600&display=swap">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="top">
+  <a class="skip" href="#app">تخطَّ إلى المحتوى</a>
   <div class="wrap">
     <button class="icon-btn burger" id="menuBtn" type="button" aria-label="القائمة" aria-expanded="false" aria-controls="drawer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>
     <a class="logo" href="#">
@@ -27,7 +29,7 @@
     <button class="icon-btn" id="theme" type="button" aria-label="تبديل المظهر"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
   </div>
 </header>
-<main id="app"><div class="skeleton">جارٍ تحميل الفهرس…</div></main>
+<main id="app" tabindex="-1"><div class="skeleton">جارٍ تحميل الفهرس…</div></main>
 <footer class="site">
   <div class="wrap">
     <span>واجهة مساندة لـ<a href="https://maheralqahtani.org/" target="_blank" rel="noopener">موقع معرفة السنن والآثار</a> لفضيلة الشيخ ماهر بن ظافر القحطاني حفظه الله، وجميع المواد وحقوقها للموقع.</span>
@@ -61,7 +63,7 @@
   <a href="#start" data-nav="start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.6 6.2L21 12l-6.4 2.8L12 21l-2.6-6.2L3 12l6.4-2.8z"/></svg><span>ابدأ هنا</span></a>
   <a href="#mine" data-nav="mine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>متابعتي</span></a>
 </nav>
-<div class="player" id="player" hidden>
+<section class="player" id="player" aria-label="مشغّل الدروس" hidden>
   <div class="wrap">
     <div class="ctrl">
       <button class="icon-btn" id="pPrev" type="button" aria-label="الدرس السابق"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 6v12l10-6z" transform="rotate(180 12 12) translate(-2 0)"/><rect x="16" y="6" width="2" height="12" transform="rotate(180 12 12)"/></svg></button>
@@ -81,7 +83,7 @@
     <button class="icon-btn p-close" id="pClose" type="button" aria-label="إغلاق المشغّل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <audio id="audio" preload="none"></audio>
-</div>
+</section>
 <script src="app.js"></script>
 </body>
 </html>

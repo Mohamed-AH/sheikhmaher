@@ -8,6 +8,47 @@ const nf = new Intl.NumberFormat('ar-SA');
 const N = n => nf.format(n);
 const yf = new Intl.NumberFormat('ar-SA', { useGrouping: false });
 const Y = n => yf.format(n);
+// Arabic number agreement: [one, two, few (3–10), many (11–99), other (0, 100+)], plus gender of «واحد»
+const PR = new Intl.PluralRules('ar');
+const WORDS = {
+  lesson: ['درس', 'درسان', 'دروس', 'درساً', 'درس', 'واحد'],
+  clip: ['مقطع', 'مقطعان', 'مقاطع', 'مقطعاً', 'مقطع', 'واحد'],
+  item: ['مادة', 'مادتان', 'مواد', 'مادةً', 'مادة', 'واحدة'],
+  series: ['سلسلة', 'سلسلتان', 'سلاسل', 'سلسلةً', 'سلسلة', 'واحدة'],
+  chapter: ['باب', 'بابان', 'أبواب', 'باباً', 'باب', 'واحد'],
+  article: ['مقالة', 'مقالتان', 'مقالات', 'مقالةً', 'مقالة', 'واحدة'],
+  result: ['نتيجة', 'نتيجتان', 'نتائج', 'نتيجةً', 'نتيجة', 'واحدة'],
+};
+function cnt(n, w) {
+  const f = WORDS[w], c = PR.select(n);
+  if (c === 'one') return `${f[0]} ${f[5]}`;
+  if (c === 'two') return f[1];
+  return `${N(n)} ${c === 'few' ? f[2] : c === 'many' ? f[3] : f[4]}`;
+}
+// only ever link or stream http(s) URLs taken from the source site
+const safeUrl = u => /^https?:\/\//i.test(u || '') ? u : '';
+const hasFile = u => !!safeUrl(u) && !/^https?:\/\/[^/]+\/?$/i.test(u);
+
+// ---------- routing: clean paths on the real site (/book/16/), #c-16 in the single-file preview ----------
+const PATH_MODE = !!document.querySelector('base[data-router="path"]');
+const BASE = PATH_MODE ? new URL(document.baseURI).pathname : '';
+const toPath = r => !r ? '' : r.startsWith('c-') ? `book/${r.slice(2)}/` : r.startsWith('s-') ? `section/${r.slice(2)}/` : r + '/';
+function fromPath() {
+  let p = decodeURIComponent(location.pathname);
+  if (p.startsWith(BASE)) p = p.slice(BASE.length);
+  p = p.replace(/^\/+|\/+$/g, '').replace(/(^|\/)index\.html$/, '');
+  let m;
+  if ((m = p.match(/^book\/(\d+)$/))) return 'c-' + m[1];
+  if ((m = p.match(/^section\/([\w-]+)$/))) return 's-' + m[1];
+  return p;
+}
+const L = r => PATH_MODE ? BASE + toPath(r) : '#' + r;
+const current = () => PATH_MODE ? fromPath() : decodeURIComponent(location.hash.slice(1));
+function go(r) {
+  if (PATH_MODE) { history.pushState(null, '', L(r) + (r === 'search' && lastQuery ? '?q=' + encodeURIComponent(lastQuery) : '')); route(); }
+  else if (location.hash === '#' + r) route(); else location.hash = r;
+}
+function fixLinks(root) { if (PATH_MODE) root.querySelectorAll('a[href^="#"]:not(.skip)').forEach(a => a.setAttribute('href', L(a.getAttribute('href').slice(1)))); }
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const HMONTHS = ['محرم', 'صفر', 'ربيع الأول', 'ربيع الآخر', 'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'];
 const hdate = d => { if (!d) return ''; const [y, m, day] = d.split('-').map(Number); return `${N(day)} ${HMONTHS[m - 1] || ''} ${Y(y)}هـ`; };
@@ -70,7 +111,7 @@ function prep(data) {
     c.id = Number(id);
     const ds = c.l.map(l => l[3]).filter(Boolean).sort();
     c.d0 = ds[0]; c.d1 = ds[ds.length - 1];
-    c.l.forEach(l => lessonIndex.set(l[0], { l, cat: c.id }));
+    c.l.forEach(l => { l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, cat: c.id }); });
     c.a.forEach(a => lessonIndex.set(a[0], { a, cat: c.id }));
     searchIndex.push({ type: 'cat', id: c.id, n: norm(c.t) });
   }
@@ -83,7 +124,7 @@ function prep(data) {
   };
   for (const id in C) agg(Number(id));
   S.forEach(s => {
-    s.l.forEach(l => lessonIndex.set(l[0], { l, sec: s.key }));
+    s.l.forEach(l => { l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, sec: s.key }); });
     s.a.forEach(a => lessonIndex.set(a[0], { a, sec: s.key }));
   });
   lessonIndex.forEach((v, id) => searchIndex.push({ type: 'item', id, n: norm((v.l || v.a)[1]) }));
@@ -101,7 +142,7 @@ function lessonTitle(t) {
 const lessonNo = t => { const m = t.match(/(?:^|[\s\-–(])([0-9٠-٩]{1,4})(?:[\s\-–).]|$)/); return m ? m[1] : ''; };
 const yearsLabel = c => { const a = hyear(c.r0), b = hyear(c.r1); if (!a) return ''; return 'نُشرت ' + (a === b ? `${Y(a)}هـ` : `${Y(a)}–${Y(b)}هـ`); };
 const isPdf = u => /\.pdf$/i.test(u || '');
-const isAudio = u => /\.(mp3|m4a|wav|ogg|aac|amr|wma)$/i.test(u || '');
+
 const crumbsFor = id => { const out = []; let c = C[id], guard = 0; while (c && guard++ < 12) { out.unshift(c); c = C[c.up]; } return out; };
 const origCat = c => c.x ? `${ORIGIN}/page/${c.p}` : `${ORIGIN}/page/${c.p}?category_id=${c.id}`;
 const origItem = id => `${ORIGIN}/details/${id}`;
@@ -113,22 +154,41 @@ function bookCard(c, alt) {
   return `<a class="book" href="#c-${c.id}">
     <div class="spine ${alt ? 'alt' : ''}"><span class="num">${N(c.n)}</span></div>
     <div><h3>${esc(c.t)}</h3><div class="meta">
-      <span>${N(c.n)} ${c.v.length && !c.l.length ? 'مقطع' : 'درس'}</span>
-      ${c.kids.length ? `<span>${N(c.kids.length)} باب</span>` : ''}
+      <span>${cnt(c.n, c.v.length && !c.l.length ? 'clip' : 'lesson')}</span>
+      ${c.kids.length ? `<span>${cnt(c.kids.length, 'chapter')}</span>` : ''}
       ${yrs ? `<span>${yrs}</span>` : ''}
       ${c.up != null && C[c.up] ? `<span class="pill">ضمن: ${esc(C[crumbsFor(c.id)[0].id].t)}</span>` : sec ? `<span class="pill">${esc(sec.t)}</span>` : ''}
 
-      ${c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب في عناوين الدروس">مجموعة حسب العنوان</span>` : ''}
+      ${c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب والدورة التي سُجّلت فيها">مجموعة حسب الدورة</span>` : ''}
     </div></div></a>`;
 }
-function lessonRow(l, catId, queueKey) {
-  const [id, t, url, d] = l;
-  const pdf = isPdf(url), audio = isAudio(url) || (!pdf && url);
+// position in the series, and "(2 of 4)" when consecutive lessons share the same title
+function numberLessons(groups) {
+  let pos = 0;
+  return groups.map(([g, ls]) => {
+    const titles = ls.map(l => norm(lessonTitle(l[1])));
+    return [g, ls.map((l, i) => {
+      let a = i, b = i;
+      while (a > 0 && titles[a - 1] === titles[i]) a--;
+      while (b < ls.length - 1 && titles[b + 1] === titles[i]) b++;
+      return { l, pos: ++pos, k: i - a + 1, of: b - a + 1 };
+    })];
+  });
+}
+function lessonRow(l, catId, queueKey, m) {
+  const [id, t, raw, d] = l;
+  const part = m && m.of > 1 ? ` <span class="part num">(${N(m.k)} من ${N(m.of)})</span>` : '';
+  const pos = m ? `<span class="num">الدرس ${N(m.pos)}</span>` : '';
+  const url = hasFile(raw) ? safeUrl(raw) : '';
+  const pdf = isPdf(url);
   const h = heard.has(id);
+  if (!url) return `<div class="lesson nofile" data-id="${id}"><span class="play" aria-hidden="true">${I.play}</span>
+    <div><div class="t">${esc(lessonTitle(t))}${part}</div><div class="sub">${pos}<span>التسجيل الصوتي لهذا الدرس غير متوفر</span></div></div>
+    <div class="acts"><a href="${origItem(id)}" target="_blank" rel="noopener" aria-label="صفحة الدرس في الموقع الأصلي">${I.ext}</a></div></div>`;
   return `<div class="lesson ${h ? 'heard' : ''}" data-id="${id}">
     ${pdf ? `<a class="play" href="${esc(url)}" target="_blank" rel="noopener" aria-label="فتح الكتاب">${I.pdf}</a>`
       : `<button class="play" type="button" data-play="${id}" data-q="${esc(queueKey)}" aria-label="تشغيل">${I.play}</button>`}
-    <div><div class="t">${esc(lessonTitle(t))}</div><div class="sub">${d ? `<span>${hdate(d)}</span>` : ''}${resume[id] ? `<span>توقفت عند ${fmt(resume[id])}</span>` : ''}</div></div>
+    <div><div class="t">${esc(lessonTitle(t))}${part}</div><div class="sub">${pos}${d ? `<span>${hdate(d)}</span>` : ''}${resume[id] ? `<span>توقفت عند ${fmt(resume[id])}</span>` : ''}</div></div>
     <div class="acts">
       ${!pdf ? `<button type="button" data-heard="${id}" aria-pressed="${h}" aria-label="تمّ الاستماع">${I.check}</button>` : ''}
       <a href="${esc(url)}" target="_blank" rel="noopener" aria-label="تنزيل">${I.dl}</a>
@@ -143,22 +203,22 @@ function paged(items, render, step = 80) {
   const id = 'pg' + Math.random().toString(36).slice(2, 8);
   const first = items.slice(0, step).map(render).join('');
   pagers[id] = { items, render, shown: step, step };
-  return first + (items.length > step ? `<div class="more" id="${id}"><button class="btn" type="button" data-more="${id}">عرض المزيد (${N(items.length - step)} متبقٍ)</button></div>` : '');
+  return first + (items.length > step ? `<div class="more" id="${id}"><button class="btn" type="button" data-more="${id}">عرض المزيد (بقي ${N(items.length - step)})</button></div>` : '');
 }
 let pagers = {};
 const fmt = s => { s = Math.floor(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
 
 // ---------- views ----------
 const START = [
-  ['الأصول الثلاثة', 'أول ما يبدأ به طالب العلم في معرفة دينه'],
-  ['القواعد الأربع', 'رسالة قصيرة في أصول التوحيد'],
-  ['الاصول الستة', 'ستة أصول جامعة'],
-  ['كشف الشبهات', 'تثبيت التوحيد ورد الشبه'],
-  ['كتاب التوحيد', 'الشرح المطوّل لكتاب التوحيد'],
-  ['لمعة الإعتقاد', 'مختصر في عقيدة أهل السنة'],
-  ['أصول السنة للإمام أحمد', 'أصول أهل السنة عند الإمام أحمد'],
-  ['عمدة الفقه', 'متن فقهي على مذهب الإمام أحمد'],
-  ['بلوغ المرام', 'أحاديث الأحكام للحافظ ابن حجر'],
+  ['الأصول الثلاثة', 'معرفة العبد ربه ودينه ونبيه محمداً صلى الله عليه وسلم'],
+  ['القواعد الأربع', 'معرفة القواعد التي يتميز بها توحيد أهل الإسلام عن توحيد أهل الشرك والجاهلية'],
+  ['الاصول الستة', 'أصول عظيمة جليلة ضل فيها أكثر علماء الدنيا والعوام'],
+  ['كشف الشبهات', 'إبطال حجج أهل الشرك والرد على شبهاتهم في توحيد الألوهية'],
+  ['كتاب التوحيد', 'إفراد الله بالعبادة وبيان ما ينافي ذلك أو ينقصه من الشرك الأكبر والأصغر'],
+  ['لمعة الإعتقاد', 'بيان عقيدة السلف الصالح باختصار ووضوح'],
+  ['أصول السنة للإمام أحمد', 'تقرير معتقد أهل السنة والجماعة والتمسك بالسنة والرد على أهل البدع'],
+  ['عمدة الفقه', 'مختصر فقهي اقتصر فيه مؤلفه ابن قدامة على القول الراجح وأودعه أحاديث صحيحة تبركاً بها واعتماداً عليها'],
+  ['بلوغ المرام', 'جمع أدلة الأحكام الشرعية لاستنباط المسائل الفقهية من أحاديث النبي صلى الله عليه وسلم'],
 ];
 function findSeries(q) {
   const nq = norm(q);
@@ -191,7 +251,7 @@ function viewHome() {
   <section class="block"><div class="wrap">
     <div class="block-head"><h2>أقسام المكتبة</h2><p>اختر فنّاً لترى كل الكتب المشروحة فيه</p></div>
     <div class="shelf">${S.filter(s => s.n).map(s => `<a class="subject" href="#s-${s.key}"><div class="glyph">${glyph(s.key)}</div><h3>${esc(s.t)}</h3>
-      <div class="meta num">${N(s.n)} ${s.kind === 'articles' ? 'مقالة' : 'مادة'}${s.series.length ? ` · ${N(s.series.length)} سلسلة` : ''}</div></a>`).join('')}</div>
+      <div class="meta chips num"><span>${cnt(s.n, s.kind === 'articles' ? 'article' : 'item')}</span>${s.series.length ? `<span>${cnt(s.series.length, 'series')}</span>` : ''}</div></a>`).join('')}</div>
   </div></section>
   <section class="block"><div class="wrap">
     <div class="block-head"><h2>جديد على الدروس؟ ابدأ من هنا</h2><p>ترتيب مقترح للمتون من الأيسر إلى الأوسع</p></div>
@@ -211,13 +271,13 @@ function viewHome() {
 }
 function startPath() {
   const items = START.map(([q, why]) => [findSeries(q), why]).filter(([c]) => c);
-  return `<div class="path">${items.map(([c, why]) => `<a class="step" href="#c-${c.id}"><div><h3>${esc(c.t)}</h3><p>${why} · ${N(c.n)} درس${yearsLabel(c) ? ' · ' + yearsLabel(c) : ''}</p></div></a>`).join('')}</div>`;
+  return `<div class="path">${items.map(([c, why]) => `<a class="step" href="#c-${c.id}"><div><h3>${esc(c.t)}</h3><p>${why}</p><div class="chips num"><span>${cnt(c.n, 'lesson')}</span>${yearsLabel(c) ? `<span>${yearsLabel(c)}</span>` : ''}</div></div></a>`).join('')}</div>`;
 }
 function viewStart() {
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>ابدأ من هنا</span></div>
     <h1 class="kufi">طريق مقترح لطالب العلم الجديد</h1>
     <p style="color:var(--muted);max-width:62ch">هذه متون مختصرة شرحها الشيخ، مرتبة من الأيسر إلى الأوسع. ابدأ بالأول، واستمع للدروس بالترتيب، وعلّم ما أنهيته ليظهر تقدمك.</p></div></div>
-    <div class="wrap" style="padding-block:24px">${startPath()}</div>`;
+    <div class="wrap" style="padding-block:24px"><h2 class="sr-only">الكتب المقترحة بالترتيب</h2>${startPath()}</div>`;
 }
 function viewLibrary() {
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>المكتبة</span></div>
@@ -230,7 +290,7 @@ function libraryBody(q) {
   return S.filter(s => s.series.length || s.n).map(s => {
     const list = s.series.map(id => C[id]).filter(c => c && (!nq || norm(c.t).includes(nq)));
     if (!list.length && (nq || !s.n)) return '';
-    return `<section class="block"><div class="block-head"><h2>${esc(s.t)}</h2><a class="btn" href="#s-${s.key}">${N(s.n)} مادة</a></div>
+    return `<section class="block"><div class="block-head"><h2>${esc(s.t)}</h2><a class="btn" href="#s-${s.key}">${cnt(s.n, 'item')}</a></div>
       ${list.length ? `<div class="series-list">${list.sort((a, b) => b.n - a.n).map(c => bookCard(c)).join('')}</div>` : `<p style="color:var(--muted)">مواد هذا القسم غير مقسّمة إلى سلاسل. <a href="#s-${s.key}" style="color:var(--brand)">تصفحها</a></p>`}</section>`;
   }).join('');
 }
@@ -244,9 +304,9 @@ function viewSection(key) {
   if (s.a.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.a, articleRow, 40)}</div>`;
   if (empty.length) body += `<p style="color:var(--muted);margin-top:22px">سلاسل أخرى في هذا القسم: ${empty.map(c => esc(c.t)).join('، ')}</p>`;
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><a href="#library">المكتبة</a><span aria-hidden="true">/</span><span>${esc(s.t)}</span></div>
-    <h1 class="kufi">${esc(s.t)}</h1><div class="meta"><span class="pill num">${N(s.n)} مادة</span>${list.length ? `<span class="pill num">${N(list.length)} سلسلة</span>` : ''}
+    <h1 class="kufi">${esc(s.t)}</h1><div class="meta"><span class="pill num">${cnt(s.n, 'item')}</span>${list.length ? `<span class="pill num">${cnt(list.length, 'series')}</span>` : ''}
     <a class="pill" href="${ORIGIN}/page/${s.id}" target="_blank" rel="noopener">القسم في الموقع الأصلي ↗</a></div></div></div>
-    <div class="wrap" style="padding-block:24px">${body || '<div class="empty-note">لا توجد مواد في هذا القسم.</div>'}</div>`;
+    <div class="wrap" style="padding-block:24px"><h2 class="sr-only">محتوى القسم</h2>${body || '<div class="empty-note">لا توجد مواد في هذا القسم.</div>'}</div>`;
 }
 function chaptersNav(root, current) {
   const item = (c, depth) => `<a href="#c-${c.id}" class="${c.n ? '' : 'zero'}" ${c.id === current ? 'aria-current="true"' : ''}><span>${esc(c.t.replace(/^\s*\[[^\]]+\]\s*/, ''))}</span><span class="c num">${N(c.n)}</span></a>
@@ -263,7 +323,7 @@ function viewCat(id) {
   const chain = crumbsFor(id), root = chain[0];
   const sec = secByKey[catSection[root.id]];
   const all = collectLessons(c);
-  const audioCount = all.filter(l => !isPdf(l[2])).length;
+  const audioCount = all.filter(l => l[2] && !isPdf(l[2])).length;
   const done = all.filter(l => heard.has(l[0])).length;
   const isVideo = c.v.length || (sec && sec.key === 'videos');
   let body = '';
@@ -273,7 +333,7 @@ function viewCat(id) {
   const addKids = (cc, seen = new Set([cc.id])) => cc.kids.forEach(k => { const kc = C[k]; if (!kc || seen.has(k)) return; seen.add(k); if (kc.l.length) groups.push([kc, kc.l]); addKids(kc, seen); });
   addKids(c);
   if (groups.length) {
-    body += `<div class="lessons">${groups.map(([g, ls]) => (g ? `<div class="group-title"><a href="#c-${g.id}">${esc(g.t)}</a></div>` : '') + paged(ls, l => lessonRow(l, g ? g.id : c.id, 'c-' + c.id), 120)).join('')}</div>`;
+    body += `<div class="lessons">${numberLessons(groups).map(([g, ls]) => (g ? `<div class="group-title"><a href="#c-${g.id}">${esc(g.t)}</a></div>` : '') + paged(ls, m => lessonRow(m.l, g ? g.id : c.id, 'c-' + c.id, m), 120)).join('')}</div>`;
   }
   if (c.a.length) body += `<div class="lessons">${paged(c.a, articleRow, 40)}</div>`;
   if (!body) body = `<div class="lessons"><div class="empty-note">لا توجد دروس في هذا الباب حالياً.<br><a href="${origCat(c)}" target="_blank" rel="noopener" style="color:var(--brand)">تحقق في الموقع الأصلي ↗</a></div></div>`;
@@ -282,9 +342,9 @@ function viewCat(id) {
   return `<div class="page-head"><div class="wrap">
     <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}${chain.slice(0, -1).map(x => `<a href="#c-${x.id}">${esc(x.t)}</a><span aria-hidden="true">/</span>`).join('')}</div>
     <h1>${esc(c.t)}</h1>
-    <div class="meta"><span class="pill num">${N(c.n)} ${isVideo ? 'مقطع' : 'درس'}</span>${c.kids.length ? `<span class="pill num">${N(c.kids.length)} باب</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
+    <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${c.kids.length ? `<span class="pill num">${cnt(c.kids.length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
       </div>
-    ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب الوارد في عناوينها لتسهيل متابعتها.</p>` : ''}
+    ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
     <div class="toolbar">
       ${audioCount ? `<button class="btn primary" type="button" data-playall="c-${c.id}">${I.play} استمع من البداية</button>` : ''}
       ${audioCount ? `<button class="btn" type="button" data-continue="c-${c.id}">تابع أول درس لم تسمعه</button>` : ''}
@@ -297,6 +357,7 @@ function viewCat(id) {
 }
 function viewSearch(q) {
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>البحث</span></div>
+    <h1 class="sr-only">البحث في المكتبة</h1>
     <form class="searchbox" id="pageSearch" role="search">${I.search}<input id="q2" type="search" value="${esc(q)}" placeholder="ابحث في عناوين الكتب والدروس" autocomplete="off"></form></div></div>
     <div class="wrap" id="results">${results(q)}</div>`;
 }
@@ -309,10 +370,11 @@ function results(q) {
   const items = hits.filter(h => h.type === 'item').map(h => [h.id, lessonIndex.get(h.id)]);
   const mark = t => { let s = esc(t); return s; };
   let html = '';
-  if (cats.length) html += `<div class="results-group"><h2>${N(cats.length)} كتاب وباب</h2><div class="series-list">${cats.slice(0, 30).map(c => bookCard(c)).join('')}</div></div>`;
-  if (items.length) html += `<div class="results-group"><h2>${N(items.length)} درس ومقالة</h2><div class="lessons">${paged(items, ([id, v]) => {
+  if (cats.length) html += `<div class="results-group"><h2>الكتب والأبواب: ${cnt(cats.length, 'result')}</h2><div class="series-list">${cats.slice(0, 30).map(c => bookCard(c)).join('')}</div></div>`;
+  if (items.length) html += `<div class="results-group"><h2>الدروس والمقالات: ${cnt(items.length, 'result')}</h2><div class="lessons">${paged(items, ([id, v]) => {
     if (v.a) return articleRow(v.a);
     const where = v.cat ? `<a href="#c-${v.cat}">${esc(C[v.cat].t)}</a>` : `<a href="#s-${v.sec}">${esc(secByKey[v.sec].t)}</a>`;
+    if (!v.l[2]) return lessonRow(v.l);
     const pdf = isPdf(v.l[2]);
     return `<div class="lesson" data-id="${id}">${pdf ? `<a class="play" href="${esc(v.l[2])}" target="_blank" rel="noopener" aria-label="فتح">${I.pdf}</a>` : `<button class="play" type="button" data-play="${id}" data-q="${v.cat ? 'c-' + v.cat : 's-' + v.sec}" aria-label="تشغيل">${I.play}</button>`}
       <div><div class="t">${mark(v.l[1])}</div><div class="sub">${where}${v.l[3] ? `<span>${hdate(v.l[3])}</span>` : ''}</div></div>
@@ -333,36 +395,49 @@ const notFound = () => `<div class="wrap"><div class="empty-note">الصفحة �
 let lastQuery = '';
 function route() {
   pagers = {};
-  const h = decodeURIComponent(location.hash.slice(1));
-  let html, nav = '';
+  const h = current();
+  let html, nav = '', title = '';
   if (!h) { html = viewHome(); nav = 'home'; }
   else if (h === 'start') { html = viewStart(); nav = 'start'; }
   else if (h === 'library') { html = viewLibrary(); nav = 'library'; }
   else if (h === 'mine') { html = viewMine(); nav = 'mine'; }
 
-  else if (h === 'search') { html = viewSearch(lastQuery); nav = 'search'; }
-  else if (h.startsWith('s-')) { html = viewSection(h.slice(2)); nav = 'library'; }
-  else if (h.startsWith('c-')) { html = viewCat(Number(h.slice(2))); nav = 'library'; }
+  else if (h === 'search') {
+    if (PATH_MODE && !lastQuery) lastQuery = new URLSearchParams(location.search).get('q') || '';
+    html = viewSearch(lastQuery); nav = 'search'; title = 'البحث';
+  }
+  else if (h.startsWith('s-')) { html = viewSection(h.slice(2)); nav = 'library'; title = secByKey[h.slice(2)]?.t; }
+  else if (h.startsWith('c-')) { html = viewCat(Number(h.slice(2))); nav = 'library'; title = C[Number(h.slice(2))]?.t; }
   else html = notFound();
+  if (!title) title = { start: 'ابدأ من هنا', library: 'المكتبة', mine: 'متابعتي' }[h] || '';
+  document.title = (title ? title + ' | ' : '') + SITE_NAME;
   app.innerHTML = html;
+  fixLinks(app);
   document.querySelectorAll('[data-nav]').forEach(a => a.dataset.nav === nav ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   markPlaying();
   if (h === 'search') { const i = $('#q2'); i && (i.focus(), i.setSelectionRange(i.value.length, i.value.length)); }
-  else window.scrollTo(0, 0);
+  else {
+    window.scrollTo(0, 0);
+    // move screen-reader and keyboard focus to the new page's heading, except on first load
+    if (routed) { const h1 = app.querySelector('h1'); if (h1) { h1.setAttribute('tabindex', '-1'); h1.focus({ preventScroll: true }); } }
+  }
+  routed = true;
 }
+let routed = false;
+const SITE_NAME = 'مكتبة معرفة السنن والآثار للشيخ ماهر القحطاني حفظه الله';
 
 // ---------- player ----------
 const audio = $('#audio'), player = $('#player');
 let queue = [], qi = -1, cur = null;
 const speeds = [1, 1.25, 1.5, 1.75, 2]; let sp = store.get('speed', 0);
 function queueFor(key) {
-  if (key.startsWith('c-')) return collectLessons(C[Number(key.slice(2))]).filter(l => !isPdf(l[2]));
-  if (key.startsWith('s-')) return (secByKey[key.slice(2)]?.l || []).filter(l => !isPdf(l[2]));
+  if (key.startsWith('c-')) return collectLessons(C[Number(key.slice(2))]).filter(l => l[2] && !isPdf(l[2]));
+  if (key.startsWith('s-')) return (secByKey[key.slice(2)]?.l || []).filter(l => l[2] && !isPdf(l[2]));
   return [];
 }
 function playLesson(id, key) {
   queue = queueFor(key); qi = queue.findIndex(l => l[0] === id);
-  if (qi < 0) { const v = lessonIndex.get(id); if (!v || !v.l) return; queue = [v.l]; qi = 0; }
+  if (qi < 0) { const v = lessonIndex.get(id); if (!v || !v.l || !v.l[2]) return; queue = [v.l]; qi = 0; }
   load(true);
 }
 function load(autoplay) {
@@ -373,7 +448,7 @@ function load(autoplay) {
   $('#pTitle').textContent = lessonTitle(l[1]);
   const where = v && v.cat ? C[v.cat] : null;
   $('#pSeries').textContent = where ? where.t : (v && v.sec ? secByKey[v.sec].t : '');
-  $('#pSeries').href = where ? '#c-' + where.id : (v && v.sec ? '#s-' + v.sec : '#');
+  $('#pSeries').href = L(where ? 'c-' + where.id : (v && v.sec ? 's-' + v.sec : ''));
   $('#pDl').href = l[2];
   audio.src = l[2]; audio.playbackRate = speeds[sp];
   const startAt = resume[l[0]] || 0;
@@ -417,6 +492,7 @@ if ('mediaSession' in navigator) {
 
 // ---------- events ----------
 document.addEventListener('click', e => {
+  if (e.target.closest('a.skip')) { e.preventDefault(); app.focus(); return; }
   const t = e.target.closest('button,[data-q]'); if (!t) return;
   if (t.dataset.play) { const id = Number(t.dataset.play); if (cur && cur[0] === id) { audio.paused ? audio.play().catch(() => { }) : audio.pause(); } else playLesson(id, t.dataset.q || ''); return; }
   if (t.dataset.playall) { queue = queueFor(t.dataset.playall); qi = 0; load(true); return; }
@@ -430,22 +506,23 @@ document.addEventListener('click', e => {
     const p = pagers[t.dataset.more], box = document.getElementById(t.dataset.more); if (!p) return;
     const next = p.items.slice(p.shown, p.shown + p.step); p.shown += p.step;
     box.insertAdjacentHTML('beforebegin', next.map(p.render).join(''));
-    if (p.shown >= p.items.length) box.remove(); else t.textContent = `عرض المزيد (${N(p.items.length - p.shown)} متبقٍ)`;
+    fixLinks(box.parentNode);
+    if (p.shown >= p.items.length) box.remove(); else t.textContent = `عرض المزيد (بقي ${N(p.items.length - p.shown)})`;
     markPlaying(); return;
   }
-  if (t.classList.contains('chip') && t.dataset.q) { lastQuery = t.dataset.q; location.hash = 'search'; if (location.hash === '#search') route(); }
+  if (t.classList.contains('chip') && t.dataset.q) { lastQuery = t.dataset.q; go('search'); }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
   const i = e.target.querySelector('input'); lastQuery = i.value;
-  if (location.hash !== '#search') location.hash = 'search'; else $('#results').innerHTML = results(lastQuery);
+  if (current() !== 'search') go('search'); else { $('#results').innerHTML = results(lastQuery); fixLinks($('#results')); if (PATH_MODE) history.replaceState(null, '', L('search') + '?q=' + encodeURIComponent(lastQuery)); }
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'q2') { lastQuery = e.target.value; clearTimeout(window.__st); window.__st = setTimeout(() => { pagers = {}; $('#results').innerHTML = results(lastQuery); markPlaying(); }, 160); }
-  if (e.target.id === 'libFilter') $('#libBody').innerHTML = libraryBody(e.target.value);
+  if (e.target.id === 'q2') { lastQuery = e.target.value; clearTimeout(window.__st); window.__st = setTimeout(() => { pagers = {}; $('#results').innerHTML = results(lastQuery); fixLinks($('#results')); markPlaying(); if (PATH_MODE) history.replaceState(null, '', L('search') + (lastQuery ? '?q=' + encodeURIComponent(lastQuery) : '')); }, 200); }
+  if (e.target.id === 'libFilter') { $('#libBody').innerHTML = libraryBody(e.target.value); fixLinks($('#libBody')); }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === '/' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); const i = $('#q') || $('#q2'); if (i) i.focus(); else location.hash = 'search'; }
+  if (e.key === '/' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); const i = $('#q') || $('#q2'); if (i) i.focus(); else go('search'); }
 });
 const toggleTheme = () => {
   const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
@@ -467,6 +544,7 @@ $('#pClose').onclick = () => {
 const drawer = $('#drawer'), scrim = $('#scrim'), menuBtn = $('#menuBtn');
 function setMenu(open) {
   drawer.hidden = !open; scrim.hidden = !open; menuBtn.setAttribute('aria-expanded', open);
+  document.querySelectorAll('body > header, body > main, body > footer, .bottom-nav, #player').forEach(el => { el.inert = open; });
   document.body.classList.toggle('no-scroll', open);
   if (open) $('#menuClose').focus(); else if (document.activeElement && drawer.contains(document.activeElement)) menuBtn.focus();
 }
@@ -474,19 +552,47 @@ menuBtn.onclick = () => setMenu(true);
 $('#menuClose').onclick = () => setMenu(false);
 scrim.onclick = () => setMenu(false);
 drawer.addEventListener('click', e => { if (e.target.closest('a')) setMenu(false); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !drawer.hidden) setMenu(false); });
+document.addEventListener('keydown', e => {
+  if (drawer.hidden) return;
+  if (e.key === 'Escape') setMenu(false);
+  if (e.key === 'Tab') { // keep focus inside the open menu
+    const f = [...drawer.querySelectorAll('a[href],button')]; const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+});
 { const t = store.get('theme', null); if (t) document.documentElement.dataset.theme = t; }
-window.addEventListener('hashchange', route);
+if (PATH_MODE) {
+  window.addEventListener('popstate', route);
+  // internal links navigate without a full page load
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[href]');
+    if (!a || a.target || a.classList.contains('skip') || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const u = new URL(a.href, location.href);
+    if (u.origin !== location.origin || !u.pathname.startsWith(BASE) || /\.(json|xml|txt|png)$/.test(u.pathname)) return;
+    e.preventDefault();
+    if (u.pathname + u.search !== location.pathname + location.search) history.pushState(null, '', u.pathname + u.search);
+    route();
+  });
+  // old #c-16 style links still work
+  const legacy = location.hash.slice(1);
+  if (/^(c-\d+|s-[\w-]+|start|library|mine|search)$/.test(legacy)) history.replaceState(null, '', L(legacy));
+} else window.addEventListener('hashchange', route);
 
 // ---------- boot ----------
 function boot(data) {
   prep(data);
   $('#drawerSections').innerHTML = S.filter(s => s.n).map(s => `<a href="#s-${s.key}"><span>${esc(s.t)}</span><span class="num">${N(s.n)}</span></a>`).join('');
+  fixLinks(document);
   if (data.built) $('#built').textContent = 'آخر تحديث للفهرس: ' + new Date(data.built).toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: 'long', day: 'numeric' });
   route();
   const last = store.get('last', null);
   if (last && lessonIndex.get(last.id)?.l) { const v = lessonIndex.get(last.id); queue = v.cat ? queueFor('c-' + v.cat) : [v.l]; qi = Math.max(0, queue.findIndex(l => l[0] === last.id)); load(false); }
 }
 if (window.CATALOG) boot(window.CATALOG);
-else fetch('data/catalog.json').then(r => r.json()).then(boot).catch(() => { app.innerHTML = '<div class="empty-note">تعذّر تحميل الفهرس. حدّث الصفحة.</div>'; });
+else fetch('data/catalog.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(boot).catch(() => {
+  // keep any pre-rendered page content; only say so when there is nothing to show
+  const note = '<div class="empty-note" role="alert">تعذّر تحميل الفهرس. تحقق من الاتصال ثم حدّث الصفحة.</div>';
+  if (app.dataset.prerendered) app.insertAdjacentHTML('afterbegin', note); else app.innerHTML = note;
+});
 })();

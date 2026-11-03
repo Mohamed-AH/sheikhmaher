@@ -1,5 +1,6 @@
-"""List the detail pages whose upload date we want: first and last lesson of every series/group."""
-import json, re, sys
+"""List the detail pages whose upload date we want: first and last lesson of every series/group
+(and of every audio folder among loose lessons, since each folder is usually one course)."""
+import json, re, sys, urllib.parse
 d = json.load(open(sys.argv[1]))
 files, ids = set(), set()
 for c in d['cats'].values():
@@ -12,6 +13,8 @@ for p in ['7', '8', '9', '10', '11', '12', '13', '2', '15']:
         if f['id'] in files: continue
         m = re.match(r'\s*[\[(]\s*([^\])]+?)\s*[\])]', f['title'])
         groups.setdefault(m.group(1) if m else '', []).append(f['id'])
+        folder = urllib.parse.unquote(f['url']).rsplit('/', 1)[0]
+        groups.setdefault('dir:' + folder, []).append(f['id'])
     for g in groups.values():
         g.sort(); ids |= {g[0], g[-1]}
 print('\n'.join(f'https://maheralqahtani.org/details/{i}' for i in sorted(ids)))

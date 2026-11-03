@@ -20,8 +20,26 @@ One-time setup on GitHub: Settings → Pages → Source: **GitHub Actions**.
 
 ## Cloudflare Pages (second host)
 Cloudflare redeploys automatically on every push to `main`, so the nightly catalog refresh reaches it too.
-In Cloudflare: Workers & Pages → Create → Pages → Connect to Git → `Mohamed-AH/sheikhmaher`, then:
+In Cloudflare: Workers & Pages → your project → Settings → Build:
 - Production branch: `main`
 - Framework preset: None
-- Build command: `mkdir -p _site && cp -r index.html styles.css app.js data _site/`
+- Build command: `python3 -I tools/build_site.py --out _site --base /`
 - Build output directory: `_site`
+- Environment variable `SITE_URL`: the canonical address (see below)
+
+Cloudflare Pages also serves `_headers` (security headers). Turn on Web Analytics under the project's
+Metrics tab; the site's security policy already allows its script.
+
+## Search engines
+Every section and book has its own page (`/book/16/`, `/section/fiqh/`), plus `sitemap.xml` and `robots.txt`.
+- **Canonical address:** set `SITE_URL` (GitHub: Settings → Secrets and variables → Actions → Variables;
+  Cloudflare: project environment variables) to the one address Google should index. Until the custom
+  domain exists it defaults to `https://mohamed-ah.github.io/sheikhmaher/`; switch both hosts to the
+  custom domain when it is live.
+- **Search Console:** add the canonical address as a property. Verify with the HTML-tag method by putting
+  the token in a `GSC_VERIFICATION` variable (both hosts), or with DNS once the domain is on Cloudflare.
+  Then submit `sitemap.xml`.
+
+## Local preview
+`python3 -I tools/build_site.py --out /tmp/site --base /` then serve `/tmp/site` with any static server.
+Serving the repo folder itself (without the build step) also works, with `#c-16` style links.
