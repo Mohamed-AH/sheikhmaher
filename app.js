@@ -177,7 +177,7 @@ function viewHome() {
   return `
   <section class="hero"><div class="wrap">
     <div>
-      <div class="eyebrow">فضيلة الشيخ ماهر بن ظافر القحطاني</div>
+      <div class="eyebrow">فضيلة الشيخ ماهر بن ظافر القحطاني حفظه الله</div>
       <h1>كل الدروس في مكان واحد، <span>مرتبة كتاباً كتاباً</span></h1>
       <p class="lede">فهرس كامل لشروح المتون والمحاضرات والخطب المنشورة في موقع معرفة السنن والآثار، مع الأعداد الحقيقية لكل سلسلة بعد مراجعة صفحاتها الفرعية.</p>
       <form class="searchbox" id="heroSearch" role="search">${I.search}<input id="q" type="search" placeholder="ابحث عن كتاب أو درس، مثل: كتاب التوحيد" autocomplete="off"><kbd>/</kbd></form>
