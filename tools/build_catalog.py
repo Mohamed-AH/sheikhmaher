@@ -55,8 +55,11 @@ link_title = {}
 for holder in list(secs.values()) + list(cats.values()):
     for x in holder.get('cats', []):
         link_title.setdefault(x['id'], x['title'])
+# scholars' titles and honorifics for series names (see tools/titles.json)
+TITLES = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'titles.json'), encoding='utf-8')).items() if not k.startswith('_')}
 for cid, c in cats.items():
     c['title'] = link_title.get(cid, c['title'])
+    c['title'] = TITLES.get(c['title'].strip(), c['title'])
 
 # Lessons whose audio link points at the site's home page are placeholders for recordings that
 # were never found; the site's team keeps them unpublished, so they are left out here (counts too).
@@ -188,6 +191,7 @@ def course_groups(loose, label):
             fs.sort(key=lambda f: f['id'])
             names = [f['_book'] for f in fs]
             title = max(set(names), key=lambda n: (names.count(n), len(n)))
+            title = TITLES.get(title, title)
             groups.append({'book': b, 'title': title, 'files': fs, 'size': sum(len(u[1]) for u in keep),
                            'folders': sorted({f['_key'] or '-' for f in fs})})
     # repeated books: same base title, distinguished by year, oldest first
