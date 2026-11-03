@@ -17,3 +17,11 @@ catalog if the new crawl has fewer than 90% of the previous items). The GitHub A
 `.github/workflows/site.yml` runs it daily, commits any new lessons, and deploys to GitHub Pages.
 
 One-time setup on GitHub: Settings → Pages → Source: **GitHub Actions**.
+
+## Cloudflare Pages (second host)
+Cloudflare redeploys automatically on every push to `main`, so the nightly catalog refresh reaches it too.
+In Cloudflare: Workers & Pages → Create → Pages → Connect to Git → `Mohamed-AH/sheikhmaher`, then:
+- Production branch: `main`
+- Framework preset: None
+- Build command: `mkdir -p _site && cp -r index.html styles.css app.js data _site/`
+- Build output directory: `_site`
