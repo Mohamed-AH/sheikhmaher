@@ -10,6 +10,8 @@ it reads its public pages, builds a clean catalog, and links/streams the origina
 - `tools/crawl.py` — crawls all listing pages (sections, series, sub-chapters, pagination)
 - `tools/prefetch.py` — parallel page fetcher (used for detail pages / speeding up long paginations)
 - `tools/build_catalog.py` — turns the crawl into `data/catalog.json`
+- `tools/titles.json` — display names for series (scholar's title and «رحمه الله»), keyed by the original site's name
+- `tools/books.json` — texts (المتون) explained more than once; all their explanations are shown together on one page, each with a short label (place, course or year). Add a text or fix a label here
 
 ## Refresh the data
 `tools/refresh.sh` re-crawls the site and rebuilds `data/catalog.json` (it refuses to overwrite the

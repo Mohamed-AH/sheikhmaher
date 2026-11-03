@@ -259,11 +259,61 @@ for pid, key, label, kind in SECTIONS:
     sections.append({'id': pid, 'key': key, 't': label, 'kind': kind, 'series': roots,
                      'l': [lesson(f) for f in flat], 'a': [article(a) for a in arts], 'n': n})
 
+# ---------- texts explained more than once (see tools/books.json) ----------
+BOOKS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'books.json'), encoding='utf-8'))
+def loose_re(phrase):
+    """regex for a phrase that tolerates hamza/ta-marbuta/alif-maqsura spellings and diacritics"""
+    alt = {'ا': '[اأإآ]', 'أ': '[اأإآ]', 'إ': '[اأإآ]', 'آ': '[اأإآ]', 'ة': '[ةه]', 'ه': '[ةه]', 'ى': '[ىي]', 'ي': '[ىي]'}
+    return re.compile('[ً-ٰٟـ]*'.join(alt.get(ch, r'\s+' if ch == ' ' else re.escape(ch)) for ch in phrase))
+def dates_of(cid, seen=()):
+    c = out_cats.get(cid)
+    if not c or cid in seen: return []
+    return [l[3] for l in c['l'] if len(l) > 3] + [d for k in c['kids'] for d in dates_of(k, seen + (cid,))]
+def text_label(title, rx):
+    t = re.sub(r'\s*\([^()]*هـ[^()]*\)\s*$', '', title).strip()  # year added to grouped series
+    m = rx.search(t)
+    pre, post = (t[:m.start()], t[m.end():]) if m else ('', t)
+    note = ''
+    pm = re.search(r'\(\s*ضمن\s+(برنامج[^)]*?)\s*\)', pre)
+    if pm: note = pm.group(1); pre = pre.replace(pm.group(0), '')
+    kind = 'دورة علمية' if 'الدورة العلمية' in pre else 'درس أسبوعي' if 'درس أسبوعي' in pre else ''
+    cm = re.search(r'(كتاب\s+\S+)\s+من\s+(.*)$', pre)  # "شرح كتاب الصيام من ..." -> a chapter of the text
+    chap = cm.group(1) if cm else ''
+    if cm: pre = pre[:cm.start()]
+    lm = re.search(r'(ب(?:مدينة|جامع|مسجد)\s.*?)\s+في\s+شرح', pre)
+    place = lm.group(1) if lm else ''
+    if lm: pre = pre.replace(lm.group(1), ' ')
+    pre = re.sub(r'الدورة العلمية|درس أسبوعي|التعليق على|شرح|\bفي\b|كتاب|رسالة|[/\-–]', ' ', pre).strip()
+    other = pre if pre and len(pre.split()) <= 2 else ''
+    if re.search(r'رحمه(ما)? الله', post): post = re.split(r'رحمه(?:ما)? الله', post, maxsplit=1)[-1]
+    post = re.sub(r'^\s*(الهادي إلى سبيل الرشاد|من أدلة الأحكام|في اختصار المقنع)\b.*?(?=\s+ب|$)', '', post)
+    post = re.sub(r'\bالمقامة\b|[\[\]().]', ' ', post)
+    post = re.sub(r'^[\s\-–]+|[\s\-–]+$', '', re.sub(r'\s+', ' ', post))
+    parts = [x for x in [kind, other, chap, place, post, note] if x]
+    return '، '.join(parts)
+
+texts = []
+for b in BOOKS['texts']:
+    rxs = [loose_re(m) for m in b['match']]
+    ids = []
+    for s in sections:
+        for cid in s['series']:
+            if any(t['ids'] and cid in t['ids'] for t in texts): continue
+            if any(rx.search(out_cats[cid]['t']) for rx in rxs) and out_cats[cid]['n']: ids.append(cid)
+    if len(ids) < 2: continue
+    ids.sort(key=lambda i: (min(dates_of(i) or ['9999']), i))
+    lab = {}
+    for i in ids:
+        t = out_cats[i]['t']
+        lab[i] = BOOKS.get('labels', {}).get(t) or next((text_label(t, rx) for rx in rxs if rx.search(t)), '')
+    texts.append({'k': b['key'], 't': b['t'], 'by': b.get('by', ''), 'ids': ids, 'lab': lab,
+                  'n': sum(out_cats[i]['n'] for i in ids)})
+
 built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-json.dump({'built': built, 'sections': sections, 'cats': out_cats}, open(OUT, 'w'), ensure_ascii=False, separators=(',', ':'))
+json.dump({'built': built, 'sections': sections, 'cats': out_cats, 'texts': texts}, open(OUT, 'w'), ensure_ascii=False, separators=(',', ':'))
 report['counts'].sort(key=lambda r: -(r['actual'] - r['site_says']))
 json.dump(report, open(REPORT, 'w'), ensure_ascii=False, indent=1)
-print('dates', len(dates))
+print('dates', len(dates)); print('texts', [(t['k'], len(t['ids'])) for t in texts])
 print('sections', [(s['key'], s['n'], len(s['series']), len(s['l']), len(s['a'])) for s in sections])
 print('total', sum(s['n'] for s in sections), 'cats', len(out_cats), 'count fixes', len(report['counts']),
       'recovered series', len(report['recovered']), 'recovered lessons', sum(r['lessons'] for r in report['recovered']))

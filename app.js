@@ -12,6 +12,7 @@ const Y = n => yf.format(n);
 const PR = new Intl.PluralRules('ar');
 const WORDS = {
   lesson: ['درس', 'درسان', 'دروس', 'درساً', 'درس', 'واحد'],
+  sharh: ['شرح', 'شرحان', 'شروح', 'شرحاً', 'شرح', 'واحد'],
   clip: ['مقطع', 'مقطعان', 'مقاطع', 'مقطعاً', 'مقطع', 'واحد'],
   item: ['مادة', 'مادتان', 'مواد', 'مادةً', 'مادة', 'واحدة'],
   series: ['سلسلة', 'سلسلتان', 'سلاسل', 'سلسلةً', 'سلسلة', 'واحدة'],
@@ -32,7 +33,7 @@ const hasFile = u => !!safeUrl(u) && !/^https?:\/\/[^/]+\/?$/i.test(u);
 // ---------- routing: clean paths on the real site (/book/16/), #c-16 in the single-file preview ----------
 const PATH_MODE = !!document.querySelector('base[data-router="path"]');
 const BASE = PATH_MODE ? new URL(document.baseURI).pathname : '';
-const toPath = r => !r ? '' : r.startsWith('c-') ? `book/${r.slice(2)}/` : r.startsWith('s-') ? `section/${r.slice(2)}/` : r + '/';
+const toPath = r => !r ? '' : r.startsWith('c-') ? `book/${r.slice(2)}/` : r.startsWith('s-') ? `section/${r.slice(2)}/` : r.startsWith('t-') ? `text/${r.slice(2)}/` : r + '/';
 function fromPath() {
   let p = decodeURIComponent(location.pathname);
   if (p.startsWith(BASE)) p = p.slice(BASE.length);
@@ -40,6 +41,7 @@ function fromPath() {
   let m;
   if ((m = p.match(/^book\/(\d+)$/))) return 'c-' + m[1];
   if ((m = p.match(/^section\/([\w-]+)$/))) return 's-' + m[1];
+  if ((m = p.match(/^text\/([\w-]+)$/))) return 't-' + m[1];
   return p;
 }
 const L = r => PATH_MODE ? BASE + toPath(r) : '#' + r;
@@ -98,7 +100,7 @@ const norm = s => String(s || '').replace(/[ً-ٰٟـ]/g, '').replace(/[إأآٱ
   .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
 // ---------- data ----------
-let C, S, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = [];
+let C, S, T = [], textByKey = {}, textOf = {}, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = [];
 function prep(data) {
   C = data.cats; S = data.sections;
   S.forEach(s => {
@@ -128,6 +130,13 @@ function prep(data) {
     s.a.forEach(a => lessonIndex.set(a[0], { a, sec: s.key }));
   });
   lessonIndex.forEach((v, id) => searchIndex.push({ type: 'item', id, n: norm((v.l || v.a)[1]) }));
+  // texts explained more than once: all their explanations under one heading
+  T = (data.texts || []).map(t => ({ ...t, ids: t.ids.filter(i => C[i]) })).filter(t => t.ids.length > 1);
+  T.forEach(t => {
+    textByKey[t.k] = t; t.ids.forEach(i => { textOf[i] = t; });
+    const ds = t.ids.flatMap(i => [C[i].r0, C[i].r1]).filter(Boolean).sort(); t.r0 = ds[0]; t.r1 = ds[ds.length - 1];
+    searchIndex.push({ type: 'text', k: t.k, n: norm(t.t + ' ' + t.by) });
+  });
 }
 const total = () => S.reduce((n, s) => n + s.n, 0);
 const allSeries = () => Object.values(C).filter(c => c.up == null && catSection[c.id] && secByKey[catSection[c.id]].kind !== 'videos');
@@ -171,13 +180,31 @@ function numberLessons(groups) {
       let a = i, b = i;
       while (a > 0 && titles[a - 1] === titles[i]) a--;
       while (b < ls.length - 1 && titles[b + 1] === titles[i]) b++;
-      return { l, pos: ++pos, k: i - a + 1, of: b - a + 1 };
+      return { l, pos: ++pos, k: i - a + 1, of: b - a + 1, all: b - a + 1 === ls.length };
     })];
   });
 }
+const expLabel = c => { const t = textOf[c.id]; const lab = t && t.lab[c.id]; const y = yearsLabel(c).replace('نُشرت ', ''); return lab || (y ? `شرح ${y}` : c.t); };
+function textCard(t) {
+  return `<a class="book text" href="#t-${t.k}">
+    <div class="spine stack"><span class="num">${N(t.ids.length)}</span></div>
+    <div><h3>${esc(t.t)}</h3><div class="by">${esc(t.by)}</div><div class="meta">
+      <span>${cnt(t.ids.length, 'sharh')}</span><span>${cnt(t.n, 'lesson')}</span>
+    </div></div></a>`;
+}
+// a section's series with every multi-explained text folded into one card
+function shelfItems(list) {
+  const out = [], seen = new Set();
+  list.forEach(c => {
+    const t = textOf[c.id];
+    if (!t) out.push([c.n, bookCard(c)]);
+    else if (!seen.has(t.k)) { seen.add(t.k); out.push([t.n, textCard(t)]); }
+  });
+  return out.sort((a, b) => b[0] - a[0]).map(x => x[1]).join('');
+}
 function lessonRow(l, catId, queueKey, m) {
   const [id, t, raw, d] = l;
-  const part = m && m.of > 1 ? ` <span class="part num">(${N(m.k)} من ${N(m.of)})</span>` : '';
+  const part = m && m.of > 1 && !m.all ? ` <span class="part num">(${N(m.k)} من ${N(m.of)})</span>` : '';
   const pos = m ? `<span class="num">الدرس ${N(m.pos)}</span>` : '';
   const url = hasFile(raw) ? safeUrl(raw) : '';
   const pdf = isPdf(url);
@@ -288,10 +315,10 @@ function viewLibrary() {
 function libraryBody(q) {
   const nq = norm(q);
   return S.filter(s => s.series.length || s.n).map(s => {
-    const list = s.series.map(id => C[id]).filter(c => c && (!nq || norm(c.t).includes(nq)));
+    const list = s.series.map(id => C[id]).filter(c => c && (!nq || norm(c.t).includes(nq) || (textOf[c.id] && norm(textOf[c.id].t).includes(nq))));
     if (!list.length && (nq || !s.n)) return '';
     return `<section class="block"><div class="block-head"><h2>${esc(s.t)}</h2><a class="btn" href="#s-${s.key}">${cnt(s.n, 'item')}</a></div>
-      ${list.length ? `<div class="series-list">${list.sort((a, b) => b.n - a.n).map(c => bookCard(c)).join('')}</div>` : `<p style="color:var(--muted)">مواد هذا القسم غير مقسّمة إلى سلاسل. <a href="#s-${s.key}" style="color:var(--brand)">تصفحها</a></p>`}</section>`;
+      ${list.length ? `<div class="series-list">${shelfItems(list)}</div>` : `<p style="color:var(--muted)">مواد هذا القسم غير مقسّمة إلى سلاسل. <a href="#s-${s.key}" style="color:var(--brand)">تصفحها</a></p>`}</section>`;
   }).join('');
 }
 function viewSection(key) {
@@ -299,7 +326,7 @@ function viewSection(key) {
   const list = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => b.n - a.n);
   const withLessons = list.filter(c => c.n), empty = list.filter(c => !c.n);
   let body = '';
-  if (list.length) body += `<div class="series-list">${withLessons.map(c => bookCard(c)).join('')}</div>`;
+  if (list.length) body += `<div class="series-list">${shelfItems(withLessons)}</div>`;
   if (s.l.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.l, l => lessonRow(l, null, 's-' + key))}</div>`;
   if (s.a.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.a, articleRow, 40)}</div>`;
   if (empty.length) body += `<p style="color:var(--muted);margin-top:22px">سلاسل أخرى في هذا القسم: ${empty.map(c => esc(c.t)).join('، ')}</p>`;
@@ -307,6 +334,22 @@ function viewSection(key) {
     <h1 class="kufi">${esc(s.t)}</h1><div class="meta"><span class="pill num">${cnt(s.n, 'item')}</span>${list.length ? `<span class="pill num">${cnt(list.length, 'series')}</span>` : ''}
     <a class="pill" href="${ORIGIN}/page/${s.id}" target="_blank" rel="noopener">القسم في الموقع الأصلي ↗</a></div></div></div>
     <div class="wrap" style="padding-block:24px"><h2 class="sr-only">محتوى القسم</h2>${body || '<div class="empty-note">لا توجد مواد في هذا القسم.</div>'}</div>`;
+}
+function viewText(k) {
+  const t = textByKey[k]; if (!t) return notFound();
+  const sec = secByKey[catSection[t.ids[0]]];
+  const a = hyear(t.r0), b = hyear(t.r1);
+  const items = t.ids.map((id, i) => {
+    const c = C[id], y = yearsLabel(c);
+    return `<a class="exp" href="#c-${id}"><span class="no num" aria-hidden="true">${N(i + 1)}</span>
+      <div><h3>${esc(expLabel(c))}</h3><div class="full">${esc(c.t)}</div>
+      <div class="chips num"><span>${cnt(c.n, 'lesson')}</span>${y ? `<span>${y}</span>` : ''}${secByKey[catSection[id]] !== sec ? `<span>${esc(secByKey[catSection[id]].t)}</span>` : ''}</div></div></a>`;
+  }).join('');
+  return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}<span>${esc(t.t)}</span></div>
+    <h1>${esc(t.t)}</h1><p class="byline">${esc(t.by)}</p>
+    <div class="meta"><span class="pill num">${cnt(t.ids.length, 'sharh')}</span><span class="pill num">${cnt(t.n, 'lesson')}</span>${a ? `<span class="pill">${a === b ? Y(a) : Y(a) + '–' + Y(b)}هـ</span>` : ''}</div>
+    <p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">شرح الشيخ هذا الكتاب أكثر من مرة، في أماكن وأعوام مختلفة. اختر الشرح الذي تريد متابعته؛ الترتيب من الأقدم إلى الأحدث.</p></div></div>
+    <div class="wrap" style="padding-block:24px"><h2 class="sr-only">الشروح</h2><div class="exps">${items}</div></div>`;
 }
 function chaptersNav(root, current) {
   const item = (c, depth) => `<a href="#c-${c.id}" class="${c.n ? '' : 'zero'}" ${c.id === current ? 'aria-current="true"' : ''}><span>${esc(c.t.replace(/^\s*\[[^\]]+\]\s*/, ''))}</span><span class="c num">${N(c.n)}</span></a>
@@ -340,8 +383,9 @@ function viewCat(id) {
   const yrs = yearsLabel(c);
   const showNav = root.kids.length > 0;
   return `<div class="page-head"><div class="wrap">
-    <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}${chain.slice(0, -1).map(x => `<a href="#c-${x.id}">${esc(x.t)}</a><span aria-hidden="true">/</span>`).join('')}</div>
+    <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}${textOf[root.id] ? `<a href="#t-${textOf[root.id].k}">${esc(textOf[root.id].t)}</a><span aria-hidden="true">/</span>` : ''}${chain.slice(0, -1).map(x => `<a href="#c-${x.id}">${esc(x.t)}</a><span aria-hidden="true">/</span>`).join('')}</div>
     <h1>${esc(c.t)}</h1>
+    ${textOf[root.id] && root.id === c.id ? `<nav class="others" aria-label="شروح أخرى لهذا الكتاب"><span>شروح أخرى لـ«${esc(textOf[root.id].t)}»:</span>${textOf[root.id].ids.filter(i => i !== c.id).map(i => `<a href="#c-${i}">${esc(expLabel(C[i]))}</a>`).join('')}</nav>` : ''}
     <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${c.kids.length ? `<span class="pill num">${cnt(c.kids.length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
       </div>
     ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
@@ -366,11 +410,12 @@ function results(q) {
   if (nq.length < 2) return '<div class="empty-note">اكتب كلمتين على الأقل، مثل: الأصول الثلاثة، الصيام، الربا.</div>';
   const terms = nq.split(' ');
   const hits = searchIndex.filter(x => terms.every(t => x.n.includes(t)));
+  const texts = hits.filter(h => h.type === 'text').map(h => textByKey[h.k]).filter(Boolean);
   const cats = hits.filter(h => h.type === 'cat').map(h => C[h.id]).sort((a, b) => (a.n ? 0 : 1) - (b.n ? 0 : 1) || (a.up == null ? 0 : 1) - (b.up == null ? 0 : 1) || b.n - a.n);
   const items = hits.filter(h => h.type === 'item').map(h => [h.id, lessonIndex.get(h.id)]);
   const mark = t => { let s = esc(t); return s; };
   let html = '';
-  if (cats.length) html += `<div class="results-group"><h2>الكتب والأبواب: ${cnt(cats.length, 'result')}</h2><div class="series-list">${cats.slice(0, 30).map(c => bookCard(c)).join('')}</div></div>`;
+  if (cats.length || texts.length) html += `<div class="results-group"><h2>الكتب والأبواب: ${cnt(cats.length + texts.length, 'result')}</h2><div class="series-list">${texts.map(textCard).join('')}${cats.slice(0, 30).map(c => bookCard(c)).join('')}</div></div>`;
   if (items.length) html += `<div class="results-group"><h2>الدروس والمقالات: ${cnt(items.length, 'result')}</h2><div class="lessons">${paged(items, ([id, v]) => {
     if (v.a) return articleRow(v.a);
     const where = v.cat ? `<a href="#c-${v.cat}">${esc(C[v.cat].t)}</a>` : `<a href="#s-${v.sec}">${esc(secByKey[v.sec].t)}</a>`;
@@ -407,6 +452,7 @@ function route() {
     html = viewSearch(lastQuery); nav = 'search'; title = 'البحث';
   }
   else if (h.startsWith('s-')) { html = viewSection(h.slice(2)); nav = 'library'; title = secByKey[h.slice(2)]?.t; }
+  else if (h.startsWith('t-')) { html = viewText(h.slice(2)); nav = 'library'; title = textByKey[h.slice(2)]?.t; }
   else if (h.startsWith('c-')) { html = viewCat(Number(h.slice(2))); nav = 'library'; title = C[Number(h.slice(2))]?.t; }
   else html = notFound();
   if (!title) title = { start: 'ابدأ من هنا', library: 'المكتبة', mine: 'متابعتي' }[h] || '';
@@ -576,7 +622,7 @@ if (PATH_MODE) {
   });
   // old #c-16 style links still work
   const legacy = location.hash.slice(1);
-  if (/^(c-\d+|s-[\w-]+|start|library|mine|search)$/.test(legacy)) history.replaceState(null, '', L(legacy));
+  if (/^(c-\d+|[st]-[\w-]+|start|library|mine|search)$/.test(legacy)) history.replaceState(null, '', L(legacy));
 } else window.addEventListener('hashchange', route);
 
 // ---------- boot ----------
