@@ -58,6 +58,13 @@ for holder in list(secs.values()) + list(cats.values()):
 for cid, c in cats.items():
     c['title'] = link_title.get(cid, c['title'])
 
+# Lessons whose audio link points at the site's home page are placeholders for recordings that
+# were never found; the site's team keeps them unpublished, so they are left out here (counts too).
+# They reappear on their own once a file is attached.
+has_file = lambda u: bool(re.match(r'^https?://[^/]+/.+', u or ''))
+for holder in list(cats.values()) + list(secs.values()):
+    holder['files'] = [f for f in holder.get('files', []) if has_file(f['url'])]
+
 def dedupe(items, key):
     seen, out = set(), []
     for it in items:
