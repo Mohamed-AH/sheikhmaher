@@ -192,6 +192,8 @@ def course_groups(loose, label):
             names = [f['_book'] for f in fs]
             title = max(set(names), key=lambda n: (names.count(n), len(n)))
             title = TITLES.get(title, title)
+            if not re.match(r'(شرح|التعليق|الدورة|دروس|فتاوى|مجموع الفتاوى|تفسير|تلاوات|كتاب الحج والعمرة)', title):
+                title = 'شرح ' + title  # the lessons explain this book
             groups.append({'book': b, 'title': title, 'files': fs, 'size': sum(len(u[1]) for u in keep),
                            'folders': sorted({f['_key'] or '-' for f in fs})})
     # repeated books: same base title, distinguished by year, oldest first
@@ -289,8 +291,20 @@ def text_label(title, rx):
     post = re.sub(r'^\s*(الهادي إلى سبيل الرشاد|من أدلة الأحكام|في اختصار المقنع)\b.*?(?=\s+ب|$)', '', post)
     post = re.sub(r'\bالمقامة\b|[\[\]().]', ' ', post)
     post = re.sub(r'^[\s\-–]+|[\s\-–]+$', '', re.sub(r'\s+', ' ', post))
+    km = re.match(r'^(كتاب\s+\S+)$', post)  # "بلوغ المرام ( كتاب الصيام )"
+    if km and not chap: chap, post = km.group(1), ''
     parts = [x for x in [kind, other, chap, place, post, note] if x]
-    return '، '.join(parts)
+    return {'kind': kind, 'other': other, 'chap': chap, 'where': ' '.join(x for x in [place, post] if x), 'note': note,
+            'short': '، '.join(parts)}
+def text_heading(tt, p, yrs):
+    """a proper series name, e.g. «شرح كتاب التوحيد بالطائف» or «الدورة العلمية في شرح كتاب الصيام من عمدة الأحكام»"""
+    lead = {'دورة علمية': 'الدورة العلمية في ', 'درس أسبوعي': 'درس أسبوعي في '}.get(p['kind'], '')
+    core = lead + 'شرح ' + (p['other'] + ' ' if p['other'] else '') + (p['chap'] + ' من ' if p['chap'] else '') + tt
+    return core + (' ' + p['where'] if p['where'] else f' ({yrs})' if yrs else '')
+def years_of(cid):
+    ys = sorted({d[:4] for d in dates_of(cid)})
+    if not ys: return ''
+    return (ys[0] if ys[0] == ys[-1] else f'{ys[0]}–{ys[-1]}').translate(AR_DIGITS) + 'هـ'
 
 texts = []
 for b in BOOKS['texts']:
@@ -302,11 +316,19 @@ for b in BOOKS['texts']:
             if any(rx.search(out_cats[cid]['t']) for rx in rxs) and out_cats[cid]['n']: ids.append(cid)
     if len(ids) < 2: continue
     ids.sort(key=lambda i: (min(dates_of(i) or ['9999']), i))
-    lab = {}
+    lab, head, note = {}, {}, {}
     for i in ids:
         t = out_cats[i]['t']
-        lab[i] = BOOKS.get('labels', {}).get(t) or next((text_label(t, rx) for rx in rxs if rx.search(t)), '')
-    texts.append({'k': b['key'], 't': b['t'], 'by': b.get('by', ''), 'ids': ids, 'lab': lab,
+        rx = next((r for r in rxs if r.search(t)), rxs[0])
+        p = text_label(t, rx)
+        lab[i] = p['short']
+        ym = re.search(r'\(([^()]*هـ[^()]*)\)\s*$', t)  # grouped series already carry a distinguishing year or month
+        fix = BOOKS.get('labels', {}).get(t) or {}
+        head[i] = fix.get('h') or text_heading(b['t'], p, ym.group(1) if ym else years_of(i))
+        if fix.get('short'): lab[i] = fix['short']
+        if p['note']: note[i] = p['note']
+        if out_cats[i].get('x'): out_cats[i]['t'] = head[i]  # grouped series take the proper name too
+    texts.append({'k': b['key'], 't': b['t'], 'by': b.get('by', ''), 'ids': ids, 'lab': lab, 'h': head, 'note': note,
                   'n': sum(out_cats[i]['n'] for i in ids)})
 
 built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')

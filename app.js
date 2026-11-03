@@ -342,7 +342,7 @@ function viewText(k) {
   const items = t.ids.map((id, i) => {
     const c = C[id], y = yearsLabel(c);
     return `<a class="exp" href="#c-${id}"><span class="no num" aria-hidden="true">${N(i + 1)}</span>
-      <div><h3>${esc(expLabel(c))}</h3><div class="full">${esc(c.t)}</div>
+      <div><h3>${esc((t.h && t.h[id]) || c.t)}</h3>${t.h && t.h[id] && !t.h[id].startsWith(c.t) ? `<div class="full">${esc(c.t)}</div>` : ''}${t.note && t.note[id] ? `<div class="full">ضمن ${esc(t.note[id])}</div>` : ''}
       <div class="chips num"><span>${cnt(c.n, 'lesson')}</span>${y ? `<span>${y}</span>` : ''}${secByKey[catSection[id]] !== sec ? `<span>${esc(secByKey[catSection[id]].t)}</span>` : ''}</div></div></a>`;
   }).join('');
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}<span>${esc(t.t)}</span></div>

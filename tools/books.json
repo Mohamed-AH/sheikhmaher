@@ -1,5 +1,5 @@
 {
-  "_note": "Texts (المتون) that the Sheikh explained more than once. Every series in a section whose name contains one of a text's 'match' phrases (spelling-insensitive) is listed under that text. 'labels' sets the short label of a particular series (keyed by its displayed name) when the automatic one is not right.",
+  "_note": "Texts (المتون) that the Sheikh explained more than once. Every series in a section whose name contains one of a text's 'match' phrases (spelling-insensitive) is listed under that text. 'labels' corrects a particular series (keyed by its name as built): 'h' is its full name, 'short' the label used in the list of other explanations.",
   "texts": [
     {
       "key": "tawhid",
@@ -173,8 +173,21 @@
     }
   ],
   "labels": {
-    "الدورة العلمية في شرح كتاب المناسك من الروض المربع شرح زاد المستقنع لسنة ١٤٤٢ هـ": "دورة علمية، كتاب المناسك من الروض المربع",
-    "كتاب الحج / عمدة الأحكام": "كتاب الحج",
-    "بلوغ المرام مكة (١٤٤٧–١٤٤٨هـ)": "بمكة"
+    "الدورة العلمية في شرح كتاب المناسك من الروض المربع شرح زاد المستقنع لسنة ١٤٤٢ هـ": {
+      "h": "الدورة العلمية في شرح كتاب المناسك من الروض المربع شرح زاد المستقنع (١٤٤٢هـ)",
+      "short": "دورة علمية، كتاب المناسك من الروض المربع"
+    },
+    "شرح كتاب الحج / عمدة الأحكام": {
+      "h": "شرح كتاب الحج من عمدة الأحكام",
+      "short": "كتاب الحج"
+    },
+    "شرح بلوغ المرام مكة (١٤٤٧–١٤٤٨هـ)": {
+      "h": "شرح بلوغ المرام بمكة",
+      "short": "بمكة"
+    },
+    "الدورة العلمية في شرح كتاب الحج من بلوغ المرام للحافظ ابن حجر رحمه الله ( مسجد بلال بن رباح ) - ١٤٤٣ -": {
+      "h": "الدورة العلمية في شرح كتاب الحج من بلوغ المرام بمسجد بلال بن رباح (١٤٤٣هـ)",
+      "short": "دورة علمية، كتاب الحج، بمسجد بلال بن رباح"
+    }
   }
 }

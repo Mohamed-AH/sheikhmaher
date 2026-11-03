@@ -204,8 +204,8 @@ for t in TEXTS:
     path = f'text/{t["k"]}/'
     sk = cat_section.get(t['ids'][0])
     cr = [('الرئيسية', '')] + ([(SEC[sk]['t'], f'section/{sk}/')] if sk else []) + [(t['t'], path)]
-    items = ''.join(f'<a class="exp" href="book/{i}/"><span class="no num" aria-hidden="true">{N(n + 1)}</span><div><h3>{e(t["lab"].get(str(i)) or C[i]["t"])}</h3>'
-                    f'<div class="full">{e(C[i]["t"])}</div><div class="chips num"><span>{cnt(C[i]["n"], "lesson")}</span></div></div></a>'
+    items = ''.join(f'<a class="exp" href="book/{i}/"><span class="no num" aria-hidden="true">{N(n + 1)}</span><div><h3>{e(t.get("h", {}).get(str(i)) or C[i]["t"])}</h3>'
+                    + (f'<div class="full">{e(C[i]["t"])}</div>' if not t.get('h', {}).get(str(i), C[i]['t']).startswith(C[i]['t']) else '') + f'<div class="chips num"><span>{cnt(C[i]["n"], "lesson")}</span></div></div></a>'
                     for n, i in enumerate(t['ids']) if i in C)
     body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1>{e(t["t"])}</h1><p class="byline">{e(t["by"])}</p>'
             f'<div class="meta"><span class="pill num">{cnt(len(t["ids"]), "sharh")}</span><span class="pill num">{cnt(t["n"], "lesson")}</span></div></div></div>'
