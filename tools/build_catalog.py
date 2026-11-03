@@ -3,7 +3,7 @@
 Usage:
   python3 -I build_catalog.py data.json dcache_dir ../data/catalog.json ../data/report.json
 
-What it fixes compared with the original site:
+How counts are derived:
   * counts are recomputed from the lessons actually found on every subpage (and summed over sub-chapters)
   * lessons that sit in a subject's flat list but belong to no series are regrouped into
     "recovered" series using the [ book name ] prefix in their titles

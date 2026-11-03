@@ -110,7 +110,6 @@ const origItem = id => `${ORIGIN}/details/${id}`;
 function bookCard(c, alt) {
   const sec = secByKey[catSection[c.id]];
   const yrs = yearsLabel(c);
-  const fixed = c.listed !== c.n && c.up == null;
   return `<a class="book" href="#c-${c.id}">
     <div class="spine ${alt ? 'alt' : ''}"><span class="num">${N(c.n)}</span></div>
     <div><h3>${esc(c.t)}</h3><div class="meta">
@@ -118,8 +117,8 @@ function bookCard(c, alt) {
       ${c.kids.length ? `<span>${N(c.kids.length)} باب</span>` : ''}
       ${yrs ? `<span>${yrs}</span>` : ''}
       ${c.up != null && C[c.up] ? `<span class="pill">ضمن: ${esc(C[crumbsFor(c.id)[0].id].t)}</span>` : sec ? `<span class="pill">${esc(sec.t)}</span>` : ''}
-      ${fixed ? `<span class="pill fix" title="الموقع الأصلي يعرض ${N(c.listed)}">الموقع يعرض ${N(c.listed)}</span>` : ''}
-      ${c.x ? `<span class="pill fix" title="دروس غير مصنفة في الموقع الأصلي جمعناها بحسب اسم الكتاب">مُستخرَجة</span>` : ''}
+
+      ${c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب في عناوين الدروس">مجموعة حسب العنوان</span>` : ''}
     </div></div></a>`;
 }
 function lessonRow(l, catId, queueKey) {
@@ -171,15 +170,13 @@ function viewHome() {
   const chapters = Object.values(C).filter(c => c.up != null).length;
   const biggest = series.slice().sort((a, b) => b.n - a.n).slice(0, 6);
   const latest = [...lessonIndex.entries()].filter(([, v]) => v.l && v.cat).sort((a, b) => b[0] - a[0]).slice(0, 8);
-  const fixedCount = Object.values(C).filter(c => !c.x && c.listed !== c.n).length;
-  const recovered = Object.values(C).filter(c => c.x).reduce((n, c) => n + c.n, 0);
   const cont = recent.map(id => C[id]).filter(Boolean).slice(0, 3);
   return `
   <section class="hero"><div class="wrap">
     <div>
       <div class="eyebrow">فضيلة الشيخ ماهر بن ظافر القحطاني حفظه الله</div>
-      <h1>كل الدروس في مكان واحد، <span>مرتبة كتاباً كتاباً</span></h1>
-      <p class="lede">فهرس كامل لشروح المتون والمحاضرات والخطب المنشورة في موقع معرفة السنن والآثار، مع الأعداد الحقيقية لكل سلسلة بعد مراجعة صفحاتها الفرعية.</p>
+      <h1>دروس الشيخ بواجهة جديدة، <span>مرتبة كتاباً كتاباً</span></h1>
+      <p class="lede">واجهة مساندة لموقع معرفة السنن والآثار، تعرض شروح المتون والمحاضرات والخطب المنشورة فيه مرتبةً حسب الكتب والأبواب، تيسيراً على طلاب العلم قديمهم وجديدهم.</p>
       <form class="searchbox" id="heroSearch" role="search">${I.search}<input id="q" type="search" placeholder="ابحث عن كتاب أو درس، مثل: كتاب التوحيد" autocomplete="off"><kbd>/</kbd></form>
       <div class="chips">${['التوحيد', 'الصيام', 'الحج', 'الطهارة', 'السيرة', 'الخوارج'].map(w => `<button class="chip" type="button" data-q="${w}">${w}</button>`).join('')}</div>
     </div>
@@ -187,7 +184,7 @@ function viewHome() {
       <div class="stat"><b class="num">${N(total())}</b><span>مادة علمية</span></div>
       <div class="stat"><b class="num">${N(series.length)}</b><span>سلسلة وكتاب مشروح</span></div>
       <div class="stat"><b class="num">${N(chapters)}</b><span>باباً وفصلاً داخل الكتب</span></div>
-      <a class="stat" href="#fixes"><b class="num">${N(recovered)}</b><span>درساً غير مصنّف أعدنا ترتيبه، و${N(fixedCount)} عدّاداً صحّحناه</span></a>
+      <div class="stat"><b class="num">${N(S.filter(s => s.n).length)}</b><span>قسماً علمياً</span></div>
     </div>
   </div></section>
   ${cont.length ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع من حيث توقفت</h2></div><div class="series-list">${cont.map(c => bookCard(c, true)).join('')}</div></div></section>` : ''}
@@ -245,7 +242,7 @@ function viewSection(key) {
   if (list.length) body += `<div class="series-list">${withLessons.map(c => bookCard(c)).join('')}</div>`;
   if (s.l.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.l, l => lessonRow(l, null, 's-' + key))}</div>`;
   if (s.a.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.a, articleRow, 40)}</div>`;
-  if (empty.length) body += `<p style="color:var(--muted);margin-top:22px">سلاسل لم تُرفع موادها بعد في الموقع الأصلي: ${empty.map(c => esc(c.t)).join('، ')}</p>`;
+  if (empty.length) body += `<p style="color:var(--muted);margin-top:22px">سلاسل أخرى في هذا القسم: ${empty.map(c => esc(c.t)).join('، ')}</p>`;
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><a href="#library">المكتبة</a><span aria-hidden="true">/</span><span>${esc(s.t)}</span></div>
     <h1 class="kufi">${esc(s.t)}</h1><div class="meta"><span class="pill num">${N(s.n)} مادة</span>${list.length ? `<span class="pill num">${N(list.length)} سلسلة</span>` : ''}
     <a class="pill" href="${ORIGIN}/page/${s.id}" target="_blank" rel="noopener">القسم في الموقع الأصلي ↗</a></div></div></div>
@@ -279,15 +276,15 @@ function viewCat(id) {
     body += `<div class="lessons">${groups.map(([g, ls]) => (g ? `<div class="group-title"><a href="#c-${g.id}">${esc(g.t)}</a></div>` : '') + paged(ls, l => lessonRow(l, g ? g.id : c.id, 'c-' + c.id), 120)).join('')}</div>`;
   }
   if (c.a.length) body += `<div class="lessons">${paged(c.a, articleRow, 40)}</div>`;
-  if (!body) body = `<div class="lessons"><div class="empty-note">لم تُرفع مواد هذا الباب بعد في الموقع الأصلي.<br><a href="${origCat(c)}" target="_blank" rel="noopener" style="color:var(--brand)">تحقق في الموقع الأصلي ↗</a></div></div>`;
+  if (!body) body = `<div class="lessons"><div class="empty-note">لا توجد دروس في هذا الباب حالياً.<br><a href="${origCat(c)}" target="_blank" rel="noopener" style="color:var(--brand)">تحقق في الموقع الأصلي ↗</a></div></div>`;
   const yrs = yearsLabel(c);
   const showNav = root.kids.length > 0;
   return `<div class="page-head"><div class="wrap">
     <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}${chain.slice(0, -1).map(x => `<a href="#c-${x.id}">${esc(x.t)}</a><span aria-hidden="true">/</span>`).join('')}</div>
     <h1>${esc(c.t)}</h1>
     <div class="meta"><span class="pill num">${N(c.n)} ${isVideo ? 'مقطع' : 'درس'}</span>${c.kids.length ? `<span class="pill num">${N(c.kids.length)} باب</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
-      ${c.listed !== c.n ? `<span class="pill fix">الموقع الأصلي يعرض ${N(c.listed)}، والعدد الفعلي ${N(c.n)}</span>` : ''}</div>
-    ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">هذه الدروس موجودة في الموقع الأصلي ضمن القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}» دون أن تُربط بسلسلة، فلا يصل إليها إلا من يتصفح مئات الصفحات. جمعناها هنا بحسب اسم الكتاب في عنوان كل درس.</p>` : ''}
+      </div>
+    ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب الوارد في عناوينها لتسهيل متابعتها.</p>` : ''}
     <div class="toolbar">
       ${audioCount ? `<button class="btn primary" type="button" data-playall="c-${c.id}">${I.play} استمع من البداية</button>` : ''}
       ${audioCount ? `<button class="btn" type="button" data-continue="c-${c.id}">تابع أول درس لم تسمعه</button>` : ''}
@@ -330,17 +327,6 @@ function viewMine() {
     <div class="wrap"><section class="block"><div class="block-head"><h2>المحفوظات</h2></div>${sv.length ? `<div class="series-list">${sv.map(c => bookCard(c, true)).join('')}</div>` : '<p style="color:var(--muted)">لم تحفظ شيئاً بعد. اضغط «احفظ» في صفحة أي كتاب.</p>'}</section>
     <section class="block"><div class="block-head"><h2>آخر ما فتحته</h2></div>${rc.length ? `<div class="series-list">${rc.map(c => bookCard(c)).join('')}</div>` : '<p style="color:var(--muted)">لا شيء بعد.</p>'}</section></div>`;
 }
-function viewFixes() {
-  const rows = Object.values(C).filter(c => !c.x && c.listed !== c.n).sort((a, b) => (b.n - b.listed) - (a.n - a.listed));
-  const rec = Object.values(C).filter(c => c.x).sort((a, b) => b.n - a.n);
-  return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>تصحيح الأعداد</span></div><h1 class="kufi">ما صحّحناه في الفهرس</h1>
-    <p style="color:var(--muted);max-width:65ch">يعرض الموقع الأصلي عدداً بجانب كل سلسلة، وكثيراً ما يكون صفراً أو ناقصاً لأن الدروس محفوظة في أبواب فرعية. هنا العدد المعروض مقابل العدد الفعلي بعد فتح كل الصفحات الفرعية.</p></div></div>
-    <div class="wrap" style="padding-block:24px"><div class="table-wrap"><table><thead><tr><th>السلسلة أو الباب</th><th>يعرض الموقع</th><th>العدد الفعلي</th></tr></thead><tbody>
-    ${rows.map(c => `<tr><td><a href="#c-${c.id}" style="color:var(--brand)">${esc(c.t)}</a></td><td class="n"><span class="bad">${N(c.listed)}</span></td><td class="n">${N(c.n)}</td></tr>`).join('')}</tbody></table></div>
-    <div class="block-head" style="margin-top:36px"><h2>دروس كانت بلا سلسلة</h2><p>${N(rec.reduce((n, c) => n + c.n, 0))} درساً تظهر في القوائم العامة فقط، جمعناها في ${N(rec.length)} مجموعة</p></div>
-    <div class="table-wrap"><table><thead><tr><th>المجموعة</th><th>القسم</th><th>الدروس</th></tr></thead><tbody>
-    ${rec.map(c => `<tr><td><a href="#c-${c.id}" style="color:var(--brand)">${esc(c.t)}</a></td><td>${esc(secByKey[catSection[c.id]]?.t || '')}</td><td class="n">${N(c.n)}</td></tr>`).join('')}</tbody></table></div></div>`;
-}
 const notFound = () => `<div class="wrap"><div class="empty-note">الصفحة غير موجودة. <a href="#" style="color:var(--brand)">العودة للرئيسية</a></div></div>`;
 
 // ---------- router ----------
@@ -353,7 +339,7 @@ function route() {
   else if (h === 'start') { html = viewStart(); nav = 'start'; }
   else if (h === 'library') { html = viewLibrary(); nav = 'library'; }
   else if (h === 'mine') { html = viewMine(); nav = 'mine'; }
-  else if (h === 'fixes') html = viewFixes();
+
   else if (h === 'search') html = viewSearch(lastQuery);
   else if (h.startsWith('s-')) { html = viewSection(h.slice(2)); nav = 'library'; }
   else if (h.startsWith('c-')) { html = viewCat(Number(h.slice(2))); nav = 'library'; }
