@@ -168,7 +168,7 @@ function lessonRow(l, catId, queueKey) {
   const pdf = isPdf(url);
   const h = heard.has(id);
   if (!url) return `<div class="lesson nofile" data-id="${id}"><span class="play" aria-hidden="true">${I.play}</span>
-    <div><div class="t">${esc(lessonTitle(t))}</div><div class="sub"><span>الملف الصوتي غير متاح حالياً</span></div></div>
+    <div><div class="t">${esc(lessonTitle(t))}</div><div class="sub"><span>التسجيل الصوتي لهذا الدرس غير متوفر</span></div></div>
     <div class="acts"><a href="${origItem(id)}" target="_blank" rel="noopener" aria-label="صفحة الدرس في الموقع الأصلي">${I.ext}</a></div></div>`;
   return `<div class="lesson ${h ? 'heard' : ''}" data-id="${id}">
     ${pdf ? `<a class="play" href="${esc(url)}" target="_blank" rel="noopener" aria-label="فتح الكتاب">${I.pdf}</a>`
