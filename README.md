@@ -1,6 +1,6 @@
 # مكتبة دروس الشيخ ماهر القحطاني — skin site
 
-A read-only, modern front end over https://maheralqahtani.org/. It does not change the original site:
+A read-only, modern front end over https://maheralqahtani.org/. It doesn't change the original site:
 it reads its public pages, builds a clean catalog, and links/streams the original audio files.
 
 ## Files
