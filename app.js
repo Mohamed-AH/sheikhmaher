@@ -236,7 +236,7 @@ function viewHome() {
   <section class="block"><div class="wrap">
     <div class="block-head"><h2>أقسام المكتبة</h2><p>اختر فنّاً لترى كل الكتب المشروحة فيه</p></div>
     <div class="shelf">${S.filter(s => s.n).map(s => `<a class="subject" href="#s-${s.key}"><div class="glyph">${glyph(s.key)}</div><h3>${esc(s.t)}</h3>
-      <div class="meta num">${cnt(s.n, s.kind === 'articles' ? 'article' : 'item')}${s.series.length ? ` · ${cnt(s.series.length, 'series')}` : ''}</div></a>`).join('')}</div>
+      <div class="meta chips num"><span>${cnt(s.n, s.kind === 'articles' ? 'article' : 'item')}</span>${s.series.length ? `<span>${cnt(s.series.length, 'series')}</span>` : ''}</div></a>`).join('')}</div>
   </div></section>
   <section class="block"><div class="wrap">
     <div class="block-head"><h2>جديد على الدروس؟ ابدأ من هنا</h2><p>ترتيب مقترح للمتون من الأيسر إلى الأوسع</p></div>
@@ -256,7 +256,7 @@ function viewHome() {
 }
 function startPath() {
   const items = START.map(([q, why]) => [findSeries(q), why]).filter(([c]) => c);
-  return `<div class="path">${items.map(([c, why]) => `<a class="step" href="#c-${c.id}"><div><h3>${esc(c.t)}</h3><p>${why} · ${cnt(c.n, 'lesson')}${yearsLabel(c) ? ' · ' + yearsLabel(c) : ''}</p></div></a>`).join('')}</div>`;
+  return `<div class="path">${items.map(([c, why]) => `<a class="step" href="#c-${c.id}"><div><h3>${esc(c.t)}</h3><p>${why}</p><div class="chips num"><span>${cnt(c.n, 'lesson')}</span>${yearsLabel(c) ? `<span>${yearsLabel(c)}</span>` : ''}</div></div></a>`).join('')}</div>`;
 }
 function viewStart() {
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>ابدأ من هنا</span></div>
