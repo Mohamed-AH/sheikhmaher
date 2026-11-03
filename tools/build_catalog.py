@@ -8,7 +8,7 @@ How counts are derived:
   * lessons that sit in a subject's flat list but belong to no series are regrouped into
     "recovered" series using the [ book name ] prefix in their titles
 """
-import json, sys, re, os, glob, hashlib, datetime
+import json, sys, re, os, glob, hashlib, datetime, urllib.parse
 
 raw = json.load(open(sys.argv[1]))
 DCACHE, OUT, REPORT = sys.argv[2], sys.argv[3], sys.argv[4]
@@ -109,6 +109,122 @@ in_series = set()
 for c in cats.values(): in_series |= {f['id'] for f in c['files']}
 
 PREFIX = re.compile(r'^\s*[\[(]\s*([^\])]+?)\s*[\])]')
+
+# ---------- regrouping loose lessons into courses ----------
+# A book is often taught more than once (different years, mosques, cities). Each course's recordings
+# live in their own folder on the site, so lessons are grouped by course folder first and by the
+# "[ book ]" prefix of their titles second. Repeated books get the course's year in the heading.
+GENERIC_DIR = re.compile(r'^(\d{4}|admin|abaymene|العقيدة|الفقه|الحديث|التفسير|السيرة|السيرة النبوية|محاضرات منهجية|خطب|الرقائق)$')
+def course_key(u):
+    p = urllib.parse.unquote(urllib.parse.urlparse(u).path)
+    p = re.sub(r'[\u200e\u200f\u2066-\u2069]', '', p).strip('/')
+    segs = p.split('/')[:-1]
+    if segs[:3] == ['lfm', 'files', 'admin']: segs = segs[3:]
+    elif segs[:2] == ['lfm', 'files']: segs = segs[2:]
+    out = []
+    for x in segs:
+        out.append(x.strip())
+        if not GENERIC_DIR.match(x.strip()): return '/'.join(out)
+    return None
+def book_norm(t):
+    t = norm(t)
+    t = re.sub(r'^(شرح|التعليق علي|كتاب)\s+', '', t)
+    return re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', ' ', t)).strip()
+def same_book(a, b):
+    a, b = book_norm(a), book_norm(b)
+    return bool(a and b) and (a == b or a.startswith(b + ' ') or b.startswith(a + ' '))
+AR_DIGITS = str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩')
+def year_label(fs):
+    ys = sorted({dates[str(f['id'])][:4] for f in fs if str(f['id']) in dates})
+    if not ys: return ''
+    y = ys[0] if ys[0] == ys[-1] else f'{ys[0]}–{ys[-1]}'
+    return f'{y}هـ'.translate(AR_DIGITS)
+
+def course_groups(loose, label):
+    """Split loose lessons into courses. Returns [{'title', 'files', 'folders'}] in display order."""
+    for f in loose:
+        m = PREFIX.match(f['title'])
+        f['_book'] = m.group(1).strip() if m else ''
+        f['_key'] = course_key(f['url'])
+    # lessons with no "[ book ]" prefix take the book of their course folder
+    by_key = {}
+    for f in loose:
+        if f['_key']: by_key.setdefault(f['_key'], []).append(f)
+    for k, fs in by_key.items():
+        named = [f['_book'] for f in fs if f['_book']]
+        if named:
+            top = max(set(named), key=named.count)
+            for f in fs:
+                if not f['_book']: f['_book'] = top
+    # books: cluster spellings of the same book name
+    books = []  # [[names...]]
+    for f in loose:
+        if not f['_book']: continue
+        for b in books:
+            if same_book(b[0], f['_book']): b.append(f['_book']); break
+        else: books.append([f['_book']])
+    book_of = {}
+    for i, b in enumerate(books):
+        for n in b: book_of[n] = i
+    units = {}
+    for f in loose:
+        if not f['_book']: units.setdefault(('misc',), []).append(f); continue
+        units.setdefault((book_of[f['_book']], f['_key']), []).append(f)
+    misc = units.pop(('misc',), [])
+    # a stray lesson (or lessons stored outside any course folder) joins the largest course of the same book
+    per_book = {}
+    for (b, k), fs in units.items(): per_book.setdefault(b, []).append((k, fs))
+    groups = []
+    for b, us in per_book.items():
+        us.sort(key=lambda u: -len(u[1]))
+        keep = [u for u in us if u[0] and len(u[1]) >= 2] or [us[0]]
+        for u in us:
+            if any(u is x for x in keep): continue
+            keep[0][1].extend(u[1])
+        if sum(len(u[1]) for u in keep) < 3:
+            for u in keep: misc.extend(u[1])
+            continue
+        for k, fs in keep:
+            fs.sort(key=lambda f: f['id'])
+            names = [f['_book'] for f in fs]
+            title = max(set(names), key=lambda n: (names.count(n), len(n)))
+            groups.append({'book': b, 'title': title, 'files': fs, 'size': sum(len(u[1]) for u in keep),
+                           'folders': sorted({f['_key'] or '-' for f in fs})})
+    # repeated books: same base title, distinguished by year, oldest first
+    by_book = {}
+    for g in groups: by_book.setdefault(g['book'], []).append(g)
+    for b, gs in by_book.items():
+        gs.sort(key=lambda g: (dates.get(str(g['files'][0]['id']), '9999'), g['files'][0]['id']))
+        # folders started in the same month are chapters of one course (e.g. الصيام then الإعتكاف in Ramadan)
+        merged = []
+        for g in gs:
+            m0 = dates.get(str(g['files'][0]['id']), '')[:7]
+            if merged and m0 and m0 == dates.get(str(merged[-1]['files'][0]['id']), '')[:7]:
+                merged[-1]['files'] = sorted(merged[-1]['files'] + g['files'], key=lambda f: f['id'])
+                merged[-1]['folders'] = sorted(set(merged[-1]['folders']) | set(g['folders']))
+            else: merged.append(g)
+        gs[:] = merged
+        if len(gs) > 1:
+            base = max((g['title'] for g in gs), key=lambda t: (sum(g['title'] == t for g in gs), -len(t)))
+            labels = [year_label(g['files']) for g in gs]
+            dup = [bool(l) and labels.count(l) > 1 for l in labels]
+            for i, g in enumerate(gs):  # same year: name the month the course started
+                d0 = dates.get(str(g['files'][0]['id']))
+                if dup[i] and d0:
+                    labels[i] = f'{HMONTHS[int(d0[5:7]) - 1]} {d0[:4]}هـ'.translate(AR_DIGITS)
+            final = [l if l and labels.count(l) == 1 else (l + ' - ' if l else '') + f'الدورة {ORD[i] if i < len(ORD) else i + 1}'
+                     for i, l in enumerate(labels)]
+            for g, lab in zip(gs, final):
+                g['title'] = f'{g["title"]} ({lab})'
+    order = sorted(by_book.values(), key=lambda gs: -gs[0]['size'])
+    groups = [g for gs in order for g in gs]
+    out = [g for gs in order for g in gs]
+    if misc:
+        misc.sort(key=lambda f: f['id'])
+        out.append({'title': f'دروس متفرقة في {label}', 'files': misc, 'folders': sorted({f['_key'] or '-' for f in misc})})
+    return out
+HMONTHS = ['محرم', 'صفر', 'ربيع الأول', 'ربيع الآخر', 'جمادى الأولى', 'جمادى الآخرة', 'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة']
+ORD = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة', 'السابعة', 'الثامنة', 'التاسعة', 'العاشرة']
 next_id = 900001
 sections = []
 roots_by_page = {}
@@ -125,25 +241,13 @@ for pid, key, label, kind in SECTIONS:
     loose = [f for f in dedupe(s.get('files', []), lambda f: f['id']) if f['id'] not in in_series]
     flat = []
     if kind == 'tree' and loose:
-        groups = {}
-        for f in loose:
-            m = PREFIX.match(f['title'])
-            groups.setdefault(m.group(1).strip() if m else '', []).append(f)
-        misc = []
-        for name, fs in sorted(groups.items(), key=lambda kv: -len(kv[1])):
-            if not name or len(fs) < 3:
-                misc += fs; continue
-            fs.sort(key=lambda f: f['id'])
+        for g in course_groups(loose, label):
+            fs, name = g['files'], g['title']
+            next_id = 9000000 + fs[0]['id']  # stable across refreshes: tied to the group's first lesson
             out_cats[next_id] = {'t': name, 'p': pid, 'up': None, 'kids': [], 'n': len(fs), 'listed': len(fs), 'x': 1,
                                  'l': [lesson(f) for f in fs], 'a': [], 'v': []}
-            report['recovered'].append({'section': label, 'title': name, 'lessons': len(fs)})
-            roots.append(next_id); next_id += 1
-        if misc:
-            misc.sort(key=lambda f: f['id'])
-            out_cats[next_id] = {'t': f'دروس متفرقة في {label}', 'p': pid, 'up': None, 'kids': [], 'n': len(misc), 'listed': len(misc), 'x': 1,
-                                 'l': [lesson(f) for f in misc], 'a': [], 'v': []}
-            report['recovered'].append({'section': label, 'title': f'دروس متفرقة في {label}', 'lessons': len(misc)})
-            roots.append(next_id); next_id += 1
+            report['recovered'].append({'section': label, 'title': name, 'lessons': len(fs), 'folders': g['folders']})
+            roots.append(next_id)
     else:
         flat = loose
     arts = dedupe(s.get('articles', []), lambda a: a['id'])

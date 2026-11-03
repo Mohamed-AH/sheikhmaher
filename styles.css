@@ -174,6 +174,7 @@ section.block { padding-block: 40px 8px; }
 .play svg { width: 16px; height: 16px; }
 .lesson .t { font-size: .97rem; line-height: 1.55; overflow-wrap: anywhere; }
 .lesson .sub { color: var(--muted); font-size: .78rem; display: flex; gap: 10px; flex-wrap: wrap; }
+.lesson .part { color: var(--muted); font-size: .85em; white-space: nowrap; }
 .lesson .acts { display: flex; gap: 4px; }
 .lesson .acts a, .lesson .acts button { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
 .lesson .acts a:hover, .lesson .acts button:hover { background: var(--surface-2); color: var(--ink); }

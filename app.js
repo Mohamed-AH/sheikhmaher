@@ -159,21 +159,36 @@ function bookCard(c, alt) {
       ${yrs ? `<span>${yrs}</span>` : ''}
       ${c.up != null && C[c.up] ? `<span class="pill">ضمن: ${esc(C[crumbsFor(c.id)[0].id].t)}</span>` : sec ? `<span class="pill">${esc(sec.t)}</span>` : ''}
 
-      ${c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب في عناوين الدروس">مجموعة حسب العنوان</span>` : ''}
+      ${c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب والدورة التي سُجّلت فيها">مجموعة حسب الدورة</span>` : ''}
     </div></div></a>`;
 }
-function lessonRow(l, catId, queueKey) {
+// position in the series, and "(2 of 4)" when consecutive lessons share the same title
+function numberLessons(groups) {
+  let pos = 0;
+  return groups.map(([g, ls]) => {
+    const titles = ls.map(l => norm(lessonTitle(l[1])));
+    return [g, ls.map((l, i) => {
+      let a = i, b = i;
+      while (a > 0 && titles[a - 1] === titles[i]) a--;
+      while (b < ls.length - 1 && titles[b + 1] === titles[i]) b++;
+      return { l, pos: ++pos, k: i - a + 1, of: b - a + 1 };
+    })];
+  });
+}
+function lessonRow(l, catId, queueKey, m) {
   const [id, t, raw, d] = l;
+  const part = m && m.of > 1 ? ` <span class="part num">(${N(m.k)} من ${N(m.of)})</span>` : '';
+  const pos = m ? `<span class="num">الدرس ${N(m.pos)}</span>` : '';
   const url = hasFile(raw) ? safeUrl(raw) : '';
   const pdf = isPdf(url);
   const h = heard.has(id);
   if (!url) return `<div class="lesson nofile" data-id="${id}"><span class="play" aria-hidden="true">${I.play}</span>
-    <div><div class="t">${esc(lessonTitle(t))}</div><div class="sub"><span>التسجيل الصوتي لهذا الدرس غير متوفر</span></div></div>
+    <div><div class="t">${esc(lessonTitle(t))}${part}</div><div class="sub">${pos}<span>التسجيل الصوتي لهذا الدرس غير متوفر</span></div></div>
     <div class="acts"><a href="${origItem(id)}" target="_blank" rel="noopener" aria-label="صفحة الدرس في الموقع الأصلي">${I.ext}</a></div></div>`;
   return `<div class="lesson ${h ? 'heard' : ''}" data-id="${id}">
     ${pdf ? `<a class="play" href="${esc(url)}" target="_blank" rel="noopener" aria-label="فتح الكتاب">${I.pdf}</a>`
       : `<button class="play" type="button" data-play="${id}" data-q="${esc(queueKey)}" aria-label="تشغيل">${I.play}</button>`}
-    <div><div class="t">${esc(lessonTitle(t))}</div><div class="sub">${d ? `<span>${hdate(d)}</span>` : ''}${resume[id] ? `<span>توقفت عند ${fmt(resume[id])}</span>` : ''}</div></div>
+    <div><div class="t">${esc(lessonTitle(t))}${part}</div><div class="sub">${pos}${d ? `<span>${hdate(d)}</span>` : ''}${resume[id] ? `<span>توقفت عند ${fmt(resume[id])}</span>` : ''}</div></div>
     <div class="acts">
       ${!pdf ? `<button type="button" data-heard="${id}" aria-pressed="${h}" aria-label="تمّ الاستماع">${I.check}</button>` : ''}
       <a href="${esc(url)}" target="_blank" rel="noopener" aria-label="تنزيل">${I.dl}</a>
@@ -318,7 +333,7 @@ function viewCat(id) {
   const addKids = (cc, seen = new Set([cc.id])) => cc.kids.forEach(k => { const kc = C[k]; if (!kc || seen.has(k)) return; seen.add(k); if (kc.l.length) groups.push([kc, kc.l]); addKids(kc, seen); });
   addKids(c);
   if (groups.length) {
-    body += `<div class="lessons">${groups.map(([g, ls]) => (g ? `<div class="group-title"><a href="#c-${g.id}">${esc(g.t)}</a></div>` : '') + paged(ls, l => lessonRow(l, g ? g.id : c.id, 'c-' + c.id), 120)).join('')}</div>`;
+    body += `<div class="lessons">${numberLessons(groups).map(([g, ls]) => (g ? `<div class="group-title"><a href="#c-${g.id}">${esc(g.t)}</a></div>` : '') + paged(ls, m => lessonRow(m.l, g ? g.id : c.id, 'c-' + c.id, m), 120)).join('')}</div>`;
   }
   if (c.a.length) body += `<div class="lessons">${paged(c.a, articleRow, 40)}</div>`;
   if (!body) body = `<div class="lessons"><div class="empty-note">لا توجد دروس في هذا الباب حالياً.<br><a href="${origCat(c)}" target="_blank" rel="noopener" style="color:var(--brand)">تحقق في الموقع الأصلي ↗</a></div></div>`;
@@ -329,7 +344,7 @@ function viewCat(id) {
     <h1>${esc(c.t)}</h1>
     <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${c.kids.length ? `<span class="pill num">${cnt(c.kids.length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
       </div>
-    ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب الوارد في عناوينها لتسهيل متابعتها.</p>` : ''}
+    ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
     <div class="toolbar">
       ${audioCount ? `<button class="btn primary" type="button" data-playall="c-${c.id}">${I.play} استمع من البداية</button>` : ''}
       ${audioCount ? `<button class="btn" type="button" data-continue="c-${c.id}">تابع أول درس لم تسمعه</button>` : ''}

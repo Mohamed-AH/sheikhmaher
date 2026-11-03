@@ -125,9 +125,14 @@ def book_card(i):
             + (f'<span>{cnt(len(c["kids"]), "chapter")}</span>' if c['kids'] else '') + '</div></div></a>')
 
 def lessons_html(ls):
-    rows = []
-    for l in ls:
-        rows.append(f'<div class="lesson"><span class="play" aria-hidden="true"></span><div><div class="t">{e(lesson_title(l[1]))}</div></div>'
+    rows, ts = [], [lesson_title(l[1]) for l in ls]
+    for i, l in enumerate(ls):
+        a = b = i
+        while a > 0 and ts[a - 1] == ts[i]: a -= 1
+        while b < len(ts) - 1 and ts[b + 1] == ts[i]: b += 1
+        part = f' <span class="part">({N(i - a + 1)} من {N(b - a + 1)})</span>' if b > a else ''
+        rows.append(f'<div class="lesson"><span class="play" aria-hidden="true"></span><div><div class="t">{e(ts[i])}{part}</div>'
+                    f'<div class="sub"><span>الدرس {N(i + 1)}</span></div></div>'
                     f'<div class="acts"><a href="{ORIGIN}/details/{int(l[0])}" target="_blank" rel="noopener">صفحة الدرس</a></div></div>')
     return '<div class="lessons">' + ''.join(rows) + '</div>'
 
