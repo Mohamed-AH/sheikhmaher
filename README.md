@@ -36,9 +36,11 @@ Metrics tab; the site's security policy already allows its script.
 ## Search engines
 Every section and book has its own page (`/book/16/`, `/section/fiqh/`), plus `sitemap.xml` and `robots.txt`.
 - **Canonical address:** set `SITE_URL` (GitHub: Settings → Secrets and variables → Actions → Variables;
-  Cloudflare: project environment variables) to the one address Google should index. Until the custom
-  domain exists it defaults to `https://mohamed-ah.github.io/sheikhmaher/`; switch both hosts to the
-  custom domain when it is live.
+  Cloudflare: project environment variables) to override the one address Google should index. It
+  defaults to `https://sheikhmaheralqahtani.com/` on both hosts, so the GitHub Pages copy and
+  sheikhmaher.pages.dev point search engines at the domain. Send visitors there too with a 301 for
+  `sheikhmaher.pages.dev` and `www.sheikhmaheralqahtani.com` (Cloudflare Bulk Redirects, keeping the
+  path and query); branch previews (`<branch>.sheikhmaher.pages.dev`) are not affected.
 - **Search Console:** add the canonical address as a property. Verify with the HTML-tag method by putting
   the token in a `GSC_VERIFICATION` variable (both hosts), or with DNS once the domain is on Cloudflare.
   Then submit `sitemap.xml`.
