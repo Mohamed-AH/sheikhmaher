@@ -386,6 +386,29 @@ function chaptersNav(root, current, asked = current) {
     <ul>${empty.map(k => `<li${k.id === asked ? ' aria-current="true"' : ''}>${esc(chapterName(k))}</li>`).join('')}</ul></details>` : '';
   return `<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2><a href="#c-${root.id}" ${root.id === current ? 'aria-current="true"' : ''}><span>الكل</span><span class="c num">${N(root.n)}</span></a>${liveKids(root).map(k => item(k, 0)).join('')}${folded}</nav>`;
 }
+// ---------- video tools on a series page: search the titles, sort ----------
+let vlist = null;
+const videoCard = ([v, i]) => { const [vid, vt, vd] = Array.isArray(v) ? v : [v];
+  return `<a class="video" href="https://www.youtube.com/watch?v=${esc(vid)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(vid)}/mqdefault.jpg)">${I.yt}</div><span>${vt ? esc(vt) : `مقطع ${N(i + 1)}`}</span>${vd ? `<small class="num">${hdate(vd)}</small>` : ''}</a>`; };
+function videoTools() {
+  return `<div class="list-tools" role="search" aria-label="أدوات قائمة المقاطع">
+    <label class="field">${I.search}<input type="search" id="videoQ" placeholder="ابحث في عناوين ${N(vlist.rows.length)} مقطعاً" autocomplete="off" aria-label="ابحث في مقاطع هذه السلسلة"></label>
+    <select id="videoSort" aria-label="ترتيب المقاطع">
+      <option value="site">${vlist.dated ? 'الأقدم أولاً' : 'ترتيب الموقع الأصلي'}</option>
+      <option value="rev">${vlist.dated ? 'الأحدث أولاً' : 'عكس الترتيب'}</option>
+    </select>
+    <span class="count num" id="videoCount" aria-live="polite"></span>
+  </div>`;
+}
+function videoList(fresh) {
+  if (!vlist) return '';
+  const q = fresh ? '' : norm($('#videoQ')?.value || ''), terms = q ? q.split(' ') : [];
+  let rows = vlist.rows.filter(m => !terms.length || terms.every(t => (m.n ??= norm(Array.isArray(m[0]) ? m[0][1] || '' : '')).includes(t)));
+  if (!fresh && $('#videoSort')?.value === 'rev') rows = rows.slice().reverse();
+  const box = !fresh && $('#videoCount'); if (box) box.textContent = terms.length ? `${N(rows.length)} من ${N(vlist.rows.length)}` : '';
+  return rows.length ? paged(rows, videoCard, 48) : `<div class="empty-note" style="grid-column:1/-1">لا توجد مقاطع تطابق البحث.</div>`;
+}
+function refreshVideos() { const box = $('#videoList'); if (box) box.innerHTML = videoList(); }
 // ---------- lesson tools on a series page: search within it, sort, only what I haven't heard ----------
 let list = null;
 const sortPref = () => { const v = store.get('sort', 'book'); return ['book', 'new', 'old'].includes(v) ? v : 'book'; };
@@ -445,7 +468,8 @@ function viewCat(id, asking) {
   const done = all.filter(l => heard.has(l[0])).length;
   const isVideo = c.v.length || (sec && sec.key === 'videos');
   let body = '';
-  if (c.v.length) body += `<div class="videos">${paged(c.v.map((v, i) => [v, i]), ([v, i]) => { const [vid, vt, vd] = Array.isArray(v) ? v : [v]; return `<a class="video" href="https://www.youtube.com/watch?v=${esc(vid)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(vid)}/mqdefault.jpg)">${I.yt}</div><span>${vt ? esc(vt) : `مقطع ${N(i + 1)}`}</span>${vd ? `<small class="num">${hdate(vd)}</small>` : ''}</a>`; }, 48)}</div>`;
+  vlist = c.v.length ? { rows: c.v.map((v, i) => [v, i]), dated: c.v.some(v => Array.isArray(v) && v[2]) } : null;
+  if (c.v.length) body += (c.v.length >= 15 ? videoTools() : '') + `<div class="videos" id="videoList">${videoList(true)}</div>`;
   const groups = [];
   if (c.l.length) groups.push([null, c.l]);
   const addKids = (cc, seen = new Set([cc.id])) => cc.kids.forEach(k => { const kc = C[k]; if (!kc || seen.has(k)) return; seen.add(k); if (kc.l.length) groups.push([kc, kc.l]); addKids(kc, seen); });
@@ -647,6 +671,8 @@ document.addEventListener('input', e => {
   if (e.target.id === 'lessonQ') { clearTimeout(window.__lt); window.__lt = setTimeout(refreshList, 150); }
   if (e.target.id === 'lessonSort') { store.set('sort', e.target.value); refreshList(); }
   if (e.target.id === 'lessonUnheard') refreshList();
+  if (e.target.id === 'videoQ') { clearTimeout(window.__vt); window.__vt = setTimeout(refreshVideos, 150); }
+  if (e.target.id === 'videoSort') refreshVideos();
   if (e.target.id === 'libFilter') { $('#libBody').innerHTML = libraryBody(e.target.value); fixLinks($('#libBody')); }
 });
 document.addEventListener('keydown', e => {
