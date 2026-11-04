@@ -2,7 +2,7 @@
 can index them, plus sitemap.xml, robots.txt, 404.html and Cloudflare _headers.
 
 Usage:
-  python3 -I tools/build_site.py --out _site --base /sheikhmaher/ --site-url https://mohamed-ah.github.io/sheikhmaher/
+  python3 -I tools/build_site.py --out _site --base /sheikhmaher/ --site-url https://sheikhmaheralqahtani.com/
 
   --base       path the site is served under ("/" on Cloudflare Pages or a custom domain)
   --site-url   the canonical address (the one you register in Google Search Console)
@@ -21,13 +21,13 @@ args = ap.parse_args()
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = '/' + args.base.strip('/') + '/' if args.base.strip('/') else '/'
 SITE = (args.site_url.rstrip('/') + '/') if args.site_url else ''
-# On Cloudflare Pages without SITE_URL, use the address Cloudflare gives the build, so link previews
-# (WhatsApp, Telegram, X) still get the absolute image and page addresses they need: production builds use
-# the project's own address (https://<hash>.sheikhmaher.pages.dev → https://sheikhmaher.pages.dev/)
+# The one address search engines index and link previews point to. Every copy of the site (GitHub Pages,
+# sheikhmaher.pages.dev, www.) names it as canonical.
+DOMAIN = 'https://sheikhmaheralqahtani.com/'
+# On Cloudflare Pages without SITE_URL: production builds use the domain; branch previews use their own
+# address, so a preview's link card and sitemap stay on the preview
 if not SITE and os.environ.get('CF_PAGES_URL'):
-    cf = os.environ['CF_PAGES_URL'].rstrip('/')
-    if os.environ.get('CF_PAGES_BRANCH') == 'main': cf = re.sub(r'^https://[^./]+\.(?=[^.]+\.pages\.dev$)', 'https://', cf)
-    SITE = cf + BASE
+    SITE = DOMAIN if os.environ.get('CF_PAGES_BRANCH') == 'main' else os.environ['CF_PAGES_URL'].rstrip('/') + BASE
 OUT = os.path.abspath(args.out)
 ORIGIN = 'https://maheralqahtani.org'
 SITE_NAME = 'مكتبة معرفة السنن والآثار للشيخ ماهر القحطاني حفظه الله'
@@ -287,7 +287,7 @@ open(os.path.join(OUT, '_headers'), 'w').write(f"""/*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
-  X-Frame-Options: DENY
+{'  X-Robots-Tag: noindex' + chr(10) if os.environ.get('CF_PAGES_URL') and os.environ.get('CF_PAGES_BRANCH') != 'main' else ''}  X-Frame-Options: DENY
 /data/catalog.json
   Cache-Control: public, max-age=0, must-revalidate
 /data/c.*
