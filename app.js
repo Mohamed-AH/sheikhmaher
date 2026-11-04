@@ -333,15 +333,19 @@ function libraryBody(q) {
 }
 function viewSection(key) {
   const s = secByKey[key]; if (!s) return notFound();
-  const list = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => (b.top | 0) - (a.top | 0) || b.n - a.n);
-  const withLessons = list.filter(c => c.n), empty = list.filter(c => !c.n);
+  const ser = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => (b.top | 0) - (a.top | 0) || b.n - a.n);
+  const withLessons = ser.filter(c => c.n), empty = ser.filter(c => !c.n);
   let body = '';
-  if (list.length) body += `<div class="series-list">${shelfItems(withLessons, key)}</div>`;
-  if (s.l.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.l, l => lessonRow(l, null, 's-' + key))}</div>`;
+  if (ser.length) body += `<div class="series-list">${shelfItems(withLessons, key)}</div>`;
+  list = null;
+  if (s.l.length) {
+    list = { id: null, q: 's-' + key, plain: true, rows: s.l.map((l, i) => ({ l, pos: i + 1 })) };
+    body += `<div style="margin-top:20px">${s.l.length >= 15 ? lessonTools(list.rows, true) : ''}<div class="lessons" id="lessonList">${lessonList(true)}</div></div>`;
+  }
   if (s.a.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.a, articleRow, 40)}</div>`;
   if (empty.length) body += `<p style="color:var(--muted);margin-top:22px">سلاسل أخرى في هذا القسم: ${empty.map(c => esc(c.t)).join('، ')}</p>`;
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><a href="#library">المكتبة</a><span aria-hidden="true">/</span><span>${esc(s.t)}</span></div>
-    <h1 class="kufi">${esc(s.t)}</h1><div class="meta"><span class="pill num">${cnt(s.n, 'item')}</span>${list.length ? `<span class="pill num">${cnt(list.length, 'series')}</span>` : ''}
+    <h1 class="kufi">${esc(s.t)}</h1><div class="meta"><span class="pill num">${cnt(s.n, 'item')}</span>${ser.length ? `<span class="pill num">${cnt(ser.length, 'series')}</span>` : ''}
     <a class="pill" href="${ORIGIN}/page/${s.id}" target="_blank" rel="noopener">القسم في الموقع الأصلي ↗</a></div></div></div>
     <div class="wrap" style="padding-block:24px"><h2 class="sr-only">محتوى القسم</h2>${body || '<div class="empty-note">لا توجد مواد في هذا القسم.</div>'}</div>`;
 }
@@ -380,12 +384,12 @@ function chaptersNav(root, current, asked = current) {
 // ---------- lesson tools on a series page: search within it, sort, only what I haven't heard ----------
 let list = null;
 const sortPref = () => { const v = store.get('sort', 'book'); return ['book', 'new', 'old'].includes(v) ? v : 'book'; };
-function lessonTools(rows) {
+function lessonTools(rows, plain) {
   const s = sortPref();
   return `<div class="list-tools" role="search" aria-label="أدوات قائمة الدروس">
-    <label class="field">${I.search}<input type="search" id="lessonQ" placeholder="ابحث في ${N(rows.length)} درساً، أو اكتب رقم الدرس" autocomplete="off" aria-label="ابحث في دروس هذه السلسلة"></label>
+    <label class="field">${I.search}<input type="search" id="lessonQ" placeholder="${plain ? `ابحث في ${N(rows.length)} مادة` : `ابحث في ${N(rows.length)} درساً، أو اكتب رقم الدرس`}" autocomplete="off" aria-label="${plain ? 'ابحث في مواد هذا القسم' : 'ابحث في دروس هذه السلسلة'}"></label>
     <select id="lessonSort" aria-label="ترتيب الدروس">
-      <option value="book"${s === 'book' ? ' selected' : ''}>ترتيب الكتاب</option>
+      <option value="book"${s === 'book' ? ' selected' : ''}>${plain ? 'ترتيب الموقع الأصلي' : 'ترتيب الكتاب'}</option>
       <option value="new"${s === 'new' ? ' selected' : ''}>الأحدث نشراً أولاً</option>
       <option value="old"${s === 'old' ? ' selected' : ''}>الأقدم نشراً أولاً</option>
     </select>
@@ -396,7 +400,7 @@ function lessonTools(rows) {
 function lessonList(fresh) {
   if (!list) return '';
   const q = fresh ? '' : norm($('#lessonQ')?.value || ''), only = !fresh && $('#lessonUnheard')?.checked, sort = fresh || !$('#lessonSort') ? sortPref() : $('#lessonSort').value;
-  const terms = q ? q.split(' ') : [], num = /^\d+$/.test(q) ? Number(q) : 0;
+  const terms = q ? q.split(' ') : [], num = !list.plain && /^\d+$/.test(q) ? Number(q) : 0;
   let rows = list.rows.filter(m => (!only || !heard.has(m.l[0])) && (!terms.length || m.pos === num || terms.every(t => (m.n ??= norm(m.l[1] + ' ' + (m.g ? m.g.t : ''))).includes(t))));
   if (sort !== 'book') {
     const key = m => (m.l[3] || '') + String(m.l[0]).padStart(8, '0');
@@ -407,11 +411,12 @@ function lessonList(fresh) {
   if (box && !fresh) box.textContent = terms.length || only ? `${N(rows.length)} من ${N(list.rows.length)}` : '';
   if (!rows.length) return `<div class="empty-note">لا توجد دروس تطابق البحث.</div>`;
   let lastG;
+  if (list.plain) return paged(rows, m => lessonRow(m.l, null, list.q), 60);
   return paged(rows, m => {
     m.flat = flat;
     const head = !flat && m.g !== lastG ? (m.g ? `<div class="group-title"><a href="#c-${m.g.id}">${esc(m.g.t)}</a></div>` : '') : '';
     lastG = m.g;
-    return head + lessonRow(m.l, m.g ? m.g.id : list.id, 'c-' + list.id, m);
+    return head + lessonRow(m.l, m.g ? m.g.id : list.id, list.q, m);
   }, 60);
 }
 function refreshList() {
@@ -443,7 +448,7 @@ function viewCat(id, asking) {
   if (groups.length) {
     const rows = [];
     numberLessons(groups).forEach(([g, ls]) => ls.forEach(m => { m.g = g; rows.push(m); }));
-    list = { id: c.id, rows };
+    list = { id: c.id, q: 'c-' + c.id, rows };
     body += (rows.length >= 15 ? lessonTools(rows) : '') + `<div class="lessons" id="lessonList">${lessonList(true)}</div>`;
   }
   if (c.a.length) body += `<div class="lessons">${paged(c.a, articleRow, 40)}</div>`;
