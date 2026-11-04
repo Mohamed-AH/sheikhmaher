@@ -542,6 +542,7 @@ for b in BOOKS['texts']:
         if s['kind'] == 'videos': continue  # video series keep their own cards
         for cid in s['series']:
             if any(t['ids'] and cid in t['ids'] for t in texts): continue
+            if b.get('not') and any(loose_re(x).search(out_cats[cid]['t']) for x in b['not']): continue  # e.g. «كتاب التوحيد» of Sahih al-Bukhari
             if any(rx.search(out_cats[cid]['t']) for rx in rxs) and out_cats[cid]['n']: ids.append(cid)
     if len(ids) < 2: continue
     ids.sort(key=lambda i: (min(dates_of(i) or ['9999']), i))
