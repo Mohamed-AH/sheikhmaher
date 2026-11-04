@@ -164,7 +164,7 @@ function bookCard(c, alt) {
     <div class="spine ${alt ? 'alt' : ''}"><span class="num">${N(c.n)}</span></div>
     <div><h3>${esc(c.t)}</h3><div class="meta">
       <span>${cnt(c.n, c.v.length && !c.l.length ? 'clip' : 'lesson')}</span>
-      ${c.kids.length ? `<span>${cnt(c.kids.length, 'chapter')}</span>` : ''}
+      ${liveKids(c).length ? `<span>${cnt(liveKids(c).length, 'chapter')}</span>` : ''}
       ${yrs ? `<span>${yrs}</span>` : ''}
       ${c.up != null && C[c.up] ? `<span class="pill">ضمن: ${esc(C[crumbsFor(c.id)[0].id].t)}</span>` : sec ? `<span class="pill">${esc(sec.t)}</span>` : ''}
 
@@ -351,17 +351,29 @@ function viewText(k) {
     <p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">شرح الشيخ هذا الكتاب أكثر من مرة، في أماكن وأعوام مختلفة. اختر الشرح الذي تريد متابعته؛ الترتيب من الأقدم إلى الأحدث.</p></div></div>
     <div class="wrap" style="padding-block:24px"><h2 class="sr-only">الشروح</h2><div class="exps">${items}</div></div>`;
 }
-function chaptersNav(root, current) {
-  const item = (c, depth) => `<a href="#c-${c.id}" class="${c.n ? '' : 'zero'}" ${c.id === current ? 'aria-current="true"' : ''}><span>${esc(c.t.replace(/^\s*\[[^\]]+\]\s*/, ''))}</span><span class="c num">${N(c.n)}</span></a>
-    ${c.kids.length && depth < 4 ? `<div class="sub">${c.kids.map(k => C[k]).filter(Boolean).map(k => item(k, depth + 1)).join('')}</div>` : ''}`;
-  return `<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2><a href="#c-${root.id}" ${root.id === current ? 'aria-current="true"' : ''}><span>الكل</span><span class="c num">${N(root.n)}</span></a>${root.kids.map(k => C[k]).filter(Boolean).map(k => item(k, 0)).join('')}</nav>`;
+const chapterName = c => c.t.replace(/^\s*\[[^\]]+\]\s*/, '').replace(/^[-–]\s*/, '');
+const liveKids = c => c.kids.map(k => C[k]).filter(k => k && k.n);
+function emptyKids(c, depth = 0, out = []) {  // chapters the original site lists with no lessons yet, in book order
+  c.kids.map(k => C[k]).filter(Boolean).forEach(k => { if (!k.n) out.push(k); else if (depth < 4) emptyKids(k, depth + 1, out); });
+  return out;
+}
+function chaptersNav(root, current, asked = current) {
+  const item = (c, depth) => `<a href="#c-${c.id}" ${c.id === current ? 'aria-current="true"' : ''}><span>${esc(chapterName(c))}</span><span class="c num">${N(c.n)}</span></a>
+    ${depth < 4 && liveKids(c).length ? `<div class="sub">${liveKids(c).map(k => item(k, depth + 1)).join('')}</div>` : ''}`;
+  const empty = emptyKids(root);
+  const folded = empty.length ? `<details class="empties"${empty.some(k => k.id === asked) ? ' open' : ''}><summary>أبواب لم تُرفع دروسها بعد <span class="num">(${N(empty.length)})</span></summary>
+    <ul>${empty.map(k => `<li${k.id === asked ? ' aria-current="true"' : ''}>${esc(chapterName(k))}</li>`).join('')}</ul></details>` : '';
+  return `<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2><a href="#c-${root.id}" ${root.id === current ? 'aria-current="true"' : ''}><span>الكل</span><span class="c num">${N(root.n)}</span></a>${liveKids(root).map(k => item(k, 0)).join('')}${folded}</nav>`;
 }
 function collectLessons(c, seen = new Set()) {
   if (!c || seen.has(c.id)) return []; seen.add(c.id);
   return [...c.l, ...c.kids.flatMap(k => collectLessons(C[k], seen))];
 }
-function viewCat(id) {
-  const c = C[id]; if (!c) return notFound();
+function viewCat(id, asking) {
+  if (!C[id]) return notFound();
+  const asked = C[id], top = crumbsFor(id)[0];
+  if (!asked.n && asked.up != null && top.n) return viewCat(top.id, id).replace('<!--note-->', `<p class="notice">لم تُرفع دروس «${esc(chapterName(asked))}» بعد، فهذه أبواب الكتاب التي فيها دروس. <a href="${origCat(asked)}" target="_blank" rel="noopener">تحقق في الموقع الأصلي ↗</a></p>`);
+  const c = asked;
   recent = [id, ...recent.filter(x => x !== id)].slice(0, 6); store.set('recent', recent);
   const chain = crumbsFor(id), root = chain[0];
   const sec = secByKey[catSection[root.id]];
@@ -384,9 +396,9 @@ function viewCat(id) {
   const showNav = root.kids.length > 0;
   return `<div class="page-head"><div class="wrap">
     <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}${textOf[root.id] ? `<a href="#t-${textOf[root.id].k}">${esc(textOf[root.id].t)}</a><span aria-hidden="true">/</span>` : ''}${chain.slice(0, -1).map(x => `<a href="#c-${x.id}">${esc(x.t)}</a><span aria-hidden="true">/</span>`).join('')}</div>
-    <h1>${esc(c.t)}</h1>
+    <h1>${esc(c.t)}</h1><!--note-->
     ${textOf[root.id] && root.id === c.id ? `<nav class="others" aria-label="شروح أخرى لهذا الكتاب"><span>شروح أخرى لـ«${esc(textOf[root.id].t)}»:</span>${textOf[root.id].ids.filter(i => i !== c.id).map(i => `<a href="#c-${i}">${esc(expLabel(C[i]))}</a>`).join('')}</nav>` : ''}
-    <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${c.kids.length ? `<span class="pill num">${cnt(c.kids.length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
+    <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${liveKids(c).length ? `<span class="pill num">${cnt(liveKids(c).length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
       </div>
     ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
     <div class="toolbar">
@@ -397,7 +409,7 @@ function viewCat(id) {
     </div>
     ${audioCount ? `<div class="progress" title="${N(done)} من ${N(audioCount)}"><i style="width:${(done / audioCount * 100).toFixed(1)}%"></i></div><div style="font-size:.8rem;color:var(--muted);margin-top:4px">${N(done)} من ${N(audioCount)} درساً استمعت إليه</div>` : ''}
   </div></div>
-  <div class="wrap">${showNav ? `<div class="layout">${chaptersNav(root, c.id)}<div>${body}</div></div>` : `<div style="padding-block:24px">${body}</div>`}</div>`;
+  <div class="wrap">${showNav ? `<div class="layout">${chaptersNav(root, c.id, asking)}<div>${body}</div></div>` : `<div style="padding-block:24px">${body}</div>`}</div>`;
 }
 function viewSearch(q) {
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>البحث</span></div>
@@ -411,7 +423,7 @@ function results(q) {
   const terms = nq.split(' ');
   const hits = searchIndex.filter(x => terms.every(t => x.n.includes(t)));
   const texts = hits.filter(h => h.type === 'text').map(h => textByKey[h.k]).filter(Boolean);
-  const cats = hits.filter(h => h.type === 'cat').map(h => C[h.id]).sort((a, b) => (a.n ? 0 : 1) - (b.n ? 0 : 1) || (a.up == null ? 0 : 1) - (b.up == null ? 0 : 1) || b.n - a.n);
+  const cats = hits.filter(h => h.type === 'cat').map(h => C[h.id]).filter(c => c && (c.n || c.up == null)).sort((a, b) => (a.n ? 0 : 1) - (b.n ? 0 : 1) || (a.up == null ? 0 : 1) - (b.up == null ? 0 : 1) || b.n - a.n);
   const items = hits.filter(h => h.type === 'item').map(h => [h.id, lessonIndex.get(h.id)]);
   const mark = t => { let s = esc(t); return s; };
   let html = '';

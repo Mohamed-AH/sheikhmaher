@@ -221,12 +221,15 @@ for i, c in C.items():
     sk = cat_section.get(ch[0][0])
     tx = TEXT_OF.get(ch[0][0])
     cr = [('الرئيسية', '')] + ([(SEC[sk]['t'], f'section/{sk}/')] if sk else []) + ([(tx['t'], f'text/{tx["k"]}/')] if tx else []) + [(x['t'], f'book/{j}/') for j, x in ch]
-    kids = [k for k in c['kids'] if k in C]
+    kids = [k for k in c['kids'] if k in C and C[k]['n']]  # chapters with no lessons yet are folded below
+    empty = [k for k in c['kids'] if k in C and not C[k]['n']]
     unit = 'clip' if c['v'] and not c['l'] else 'lesson'
     body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1>{e(c["t"])}</h1>'
             f'<div class="meta"><span class="pill num">{cnt(c["n"], unit)}</span>' + (f'<span class="pill num">{cnt(len(kids), "chapter")}</span>' if kids else '') + '</div></div></div>'
             '<div class="wrap" style="padding-block:24px">'
-            + ('<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2>' + ''.join(f'<a href="book/{k}/"><span>{e(C[k]["t"])}</span><span class="c num">{N(C[k]["n"])}</span></a>' for k in kids) + '</nav>' if kids else '')
+            + ('<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2>' + ''.join(f'<a href="book/{k}/"><span>{e(C[k]["t"])}</span><span class="c num">{N(C[k]["n"])}</span></a>' for k in kids)
+               + (f'<details class="empties"><summary>أبواب لم تُرفع دروسها بعد <span class="num">({N(len(empty))})</span></summary><ul>' + ''.join(f'<li>{e(C[k]["t"])}</li>' for k in empty) + '</ul></details>' if empty else '')
+               + '</nav>' if kids or empty else '')
             + ('<h2 class="sr-only">الدروس</h2>' + lessons_html(c['l']) if c['l'] else '')
             + (''.join(f'<a class="article" href="{ORIGIN}/details/{int(a[0])}" target="_blank" rel="noopener"><h3>{e(a[1])}</h3></a>' for a in c['a']) if c['a'] else '')
             + '</div>')

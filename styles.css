@@ -159,7 +159,14 @@ section.block { padding-block: 40px 8px; }
 .chapters a:hover { background: var(--surface-2); }
 .chapters a[aria-current="true"] { background: var(--brand-soft); color: var(--brand); }
 .chapters a .c { color: var(--muted); font-size: .8rem; flex: none; }
-.chapters a.zero { opacity: .55; }
+.chapters .empties { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.chapters .empties summary { cursor: pointer; padding: 8px 10px; border-radius: 10px; font-size: .85rem; color: var(--muted); }
+.chapters .empties summary:hover { background: var(--surface-2); }
+.chapters .empties ul { list-style: none; margin: 0; padding: 0 10px 6px; }
+.chapters .empties li { padding: 5px 0; font-size: .85rem; color: var(--muted); opacity: .8; line-height: 1.5; }
+.chapters .empties li[aria-current="true"] { color: var(--brand); opacity: 1; }
+.page-head .notice { margin: 10px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--brand-soft); font-size: .9rem; max-width: 68ch; }
+.page-head .notice a { color: var(--brand); text-decoration: underline; }
 .chapters .sub { padding-inline-start: 14px; border-inline-start: 1px solid var(--line); margin-inline-start: 10px; }
 
 .lessons { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
