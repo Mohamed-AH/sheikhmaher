@@ -372,3 +372,14 @@ footer.site a, .lede a, .empty-note a, .page-head p a, .block p a { text-decorat
   .player .wrap { grid-template-columns: auto 1fr auto auto; }
   .qpanel { inset-inline: 0; width: auto; max-height: 62vh; border-radius: 16px 16px 0 0; border-inline: 0; }
 }
+
+/* continue listening cards, my list */
+.resume-card { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: start; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.resume-card .play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--brand); color: var(--surface); display: grid; place-items: center; cursor: pointer; }
+.resume-card .play svg { width: 20px; height: 20px; }
+.resume-card .t { font-family: var(--f-book); font-size: 1.08rem; font-weight: 700; line-height: 1.45; display: block; }
+.resume-card .t:hover { color: var(--brand); }
+.resume-card .sub { color: var(--muted); font-size: .8rem; display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
+.resume-card .progress { margin-top: 8px; }
+.qtools #qMine[aria-pressed="true"], .lesson .acts button[data-mylist][aria-pressed="true"] { color: var(--brand); background: var(--brand-soft); }
+.block-head .toolbar { margin: 0; display: flex; gap: 8px; flex-wrap: wrap; }

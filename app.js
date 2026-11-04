@@ -65,6 +65,8 @@ let heard = new Set(store.get('heard', []));
 let saved = new Set(store.get('saved', []));
 let resume = store.get('resume', {}); // lessonId -> seconds
 let recent = store.get('recent', []); // [catId]
+let spos = store.get('spos', []);     // [{k: 'c-<series>' | 's-<section>', id: lessonId}], the latest first: where each series was left
+let mylist = store.get('mylist', []); // lesson ids, in the order they were added
 
 // ---------- icons ----------
 const I = {
@@ -76,6 +78,10 @@ const I = {
   pdf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   bookmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v18l-6-4-6 4z"/></svg>',
+  addq: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h11M4 11h11M4 16h7"/><path d="M17.5 13v8M13.5 17h8"/></svg>',
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+  down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   yt: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,.55)"/><path d="M10 8v8l6-4z" fill="#fff"/></svg>',
 };
 const GLYPH = {
@@ -226,7 +232,7 @@ function lessonRow(l, catId, queueKey, m) {
       : `<button class="play" type="button" data-play="${id}" data-q="${esc(queueKey)}" aria-label="تشغيل">${I.play}</button>`}
     <div><div class="t">${esc(lessonTitle(t))}${part}</div><div class="sub">${pos}${d ? `<span>${hdate(d)}</span>` : ''}${resume[id] ? `<span>توقفت عند ${fmt(resume[id])}</span>` : ''}</div></div>
     <div class="acts">
-      ${!pdf ? `<button type="button" data-heard="${id}" aria-pressed="${h}" aria-label="تمّ الاستماع">${I.check}</button>` : ''}
+      ${!pdf ? `<button type="button" data-mylist="${id}" aria-pressed="${mylist.includes(id)}" aria-label="أضف إلى قائمتي">${I.addq}</button><button type="button" data-heard="${id}" aria-pressed="${h}" aria-label="تمّ الاستماع">${I.check}</button>` : ''}
       <a href="${esc(url)}" target="_blank" rel="noopener" aria-label="تنزيل">${I.dl}</a>
       <a href="${origItem(id)}" target="_blank" rel="noopener" aria-label="في الموقع الأصلي">${I.ext}</a>
     </div></div>`;
@@ -284,7 +290,8 @@ function viewHome() {
       <div class="stat"><b class="num">${N(S.filter(s => s.n).length)}</b><span>قسماً علمياً</span></div>
     </div>
   </div></section>
-  ${cont.length ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع من حيث توقفت</h2></div><div class="series-list">${cont.map(c => bookCard(c, true)).join('')}</div></div></section>` : ''}
+  ${listening(4) ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع الاستماع</h2><a class="btn" href="#mine">متابعتي</a></div><div class="series-list">${listening(4)}</div></div></section>`
+    : cont.length ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع من حيث توقفت</h2></div><div class="series-list">${cont.map(c => bookCard(c, true)).join('')}</div></div></section>` : ''}
   <section class="block"><div class="wrap">
     <div class="block-head"><h2>أقسام المكتبة</h2><p>اختر فنّاً لترى كل الكتب المشروحة فيه</p></div>
     <div class="shelf">${S.filter(s => s.n).map(s => `<a class="subject" href="#s-${s.key}"><div class="glyph">${glyph(s.key)}</div><h3>${esc(s.t)}</h3>
@@ -502,7 +509,7 @@ function viewCat(id, asking) {
     ${c.x && !c.src ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
     <div class="toolbar">
       ${audioCount ? `<button class="btn primary" type="button" data-playall="c-${c.id}">${I.play} استمع من البداية</button>` : ''}
-      ${audioCount ? `<button class="btn" type="button" data-continue="c-${c.id}">تابع أول درس لم تسمعه</button>` : ''}
+      ${audioCount ? `<button class="btn" type="button" data-continue="c-${c.id}">${spos.some(e => e.k === 'c-' + root.id) ? 'تابع من حيث توقفت' : 'تابع أول درس لم تسمعه'}</button>` : ''}
       <button class="btn" type="button" data-save="${c.id}" aria-pressed="${saved.has(c.id)}">${I.bookmark} ${saved.has(c.id) ? 'محفوظ' : 'احفظ'}</button>
       <a class="btn" href="${origCat(c)}" target="_blank" rel="noopener">${I.ext} ${c.src ? 'قناة الجامع على يوتيوب' : 'في الموقع الأصلي'}</a>
     </div>
@@ -534,16 +541,62 @@ function results(q) {
     const pdf = isPdf(v.l[2]);
     return `<div class="lesson" data-id="${id}">${pdf ? `<a class="play" href="${esc(v.l[2])}" target="_blank" rel="noopener" aria-label="فتح">${I.pdf}</a>` : `<button class="play" type="button" data-play="${id}" data-q="${v.cat ? 'c-' + v.cat : 's-' + v.sec}" aria-label="تشغيل">${I.play}</button>`}
       <div><div class="t">${mark(v.l[1])}</div><div class="sub">${where}${v.l[3] ? `<span>${hdate(v.l[3])}</span>` : ''}</div></div>
-      <div class="acts"><a href="${esc(v.l[2])}" target="_blank" rel="noopener" aria-label="تنزيل">${I.dl}</a><a href="${origItem(id)}" target="_blank" rel="noopener" aria-label="في الموقع الأصلي">${I.ext}</a></div></div>`;
+      <div class="acts">${pdf ? '' : `<button type="button" data-mylist="${id}" aria-pressed="${mylist.includes(id)}" aria-label="أضف إلى قائمتي">${I.addq}</button>`}<a href="${esc(v.l[2])}" target="_blank" rel="noopener" aria-label="تنزيل">${I.dl}</a><a href="${origItem(id)}" target="_blank" rel="noopener" aria-label="في الموقع الأصلي">${I.ext}</a></div></div>`;
   }, 60)}</div></div>`;
   return html || `<div class="empty-note">لا نتائج لـ «${esc(q)}». جرّب كلمة أقصر أو بدون ال التعريف.</div>`;
 }
 function viewMine() {
   const sv = [...saved].map(id => C[id]).filter(Boolean), rc = recent.map(id => C[id]).filter(Boolean);
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>متابعتي</span></div><h1 class="kufi">متابعتي</h1>
-    <p style="color:var(--muted)">تُحفظ في هذا المتصفح فقط: الكتب المحفوظة، وآخر ما فتحته، والدروس التي علّمتها مسموعة (${N(heard.size)}).</p></div></div>
-    <div class="wrap"><section class="block"><div class="block-head"><h2>المحفوظات</h2></div>${sv.length ? `<div class="series-list">${sv.map(c => bookCard(c, true)).join('')}</div>` : '<p style="color:var(--muted)">لم تحفظ شيئاً بعد. اضغط «احفظ» في صفحة أي كتاب.</p>'}</section>
+    <p style="color:var(--muted)">تُحفظ في هذا المتصفح فقط: أين توقفت في كل سلسلة، وقائمتك، والكتب المحفوظة، وآخر ما فتحته، والدروس التي علّمتها مسموعة (${N(heard.size)}).</p></div></div>
+    <div class="wrap">
+    ${listening(12) ? `<section class="block"><div class="block-head"><h2>تابع الاستماع</h2></div><div class="series-list">${listening(12)}</div></section>` : ''}
+    <section class="block"><div class="block-head"><h2>قائمتي</h2><div class="toolbar" id="myTools">${myTools()}</div></div>
+      <div id="myList">${myListBody()}</div></section>
+    <section class="block"><div class="block-head"><h2>الكتب المحفوظة</h2></div>${sv.length ? `<div class="series-list">${sv.map(c => bookCard(c, true)).join('')}</div>` : '<p style="color:var(--muted)">لم تحفظ شيئاً بعد. اضغط «احفظ» في صفحة أي كتاب.</p>'}</section>
     <section class="block"><div class="block-head"><h2>آخر ما فتحته</h2></div>${rc.length ? `<div class="series-list">${rc.map(c => bookCard(c)).join('')}</div>` : '<p style="color:var(--muted)">لا شيء بعد.</p>'}</section></div>`;
+}
+// ---------- continue listening: one card per series, where it was left ----------
+const seriesKey = id => { const v = lessonIndex.get(id); return v && v.cat ? 'c-' + crumbsFor(v.cat)[0].id : v && v.sec ? 's-' + v.sec : ''; };
+function listening(max) {
+  return spos.slice(0, max).map(e => {
+    const v = lessonIndex.get(e.id); if (!playable(v && v.l)) return '';
+    const c = e.k.startsWith('c-') ? C[Number(e.k.slice(2))] : null, s = c ? null : secByKey[e.k.slice(2)];
+    if (!c && !s) return '';
+    const all = (c ? collectLessons(c) : s.l).filter(playable), done = all.filter(l => heard.has(l[0])).length, at = resume[e.id];
+    return `<div class="resume-card"><button class="play" type="button" data-resume="${esc(e.k)}" aria-label="تابع الاستماع: ${esc(lessonTitle(v.l[1]))}">${I.play}</button>
+      <div><a class="t" href="#${esc(e.k)}">${esc(c ? c.t : s.t)}</a>
+      <div class="sub"><span>${esc(lessonTitle(v.l[1]))}</span>${at ? `<span class="num">توقفت عند ${fmt(at)}</span>` : ''}</div>
+      <div class="progress" title="${N(done)} من ${N(all.length)}"><i style="width:${all.length ? (done / all.length * 100).toFixed(1) : 0}%"></i></div>
+      <div class="sub num">${N(done)} من ${N(all.length)} درساً</div></div></div>`;
+  }).join('');
+}
+function noteSeries(id) {
+  const k = seriesKey(id); if (!k) return;
+  spos = [{ k, id }, ...spos.filter(x => x.k !== k)].slice(0, 20); store.set('spos', spos);
+}
+// ---------- my list: lessons from any series, played in the order they were added ----------
+const myLessons = () => mylist.map(id => lessonIndex.get(id)?.l).filter(playable);
+function myTools() {
+  return myLessons().length ? `<button class="btn primary" type="button" data-playall="m">${I.play} استمع للقائمة</button><button class="btn" type="button" data-myclear="1">${I.x} أفرغ القائمة</button>` : '';
+}
+function myListBody() {
+  const ls = myLessons();
+  if (!ls.length) return `<p style="color:var(--muted)">أضف أي درس بزر ${I.addq.replace('<svg', '<svg style="width:18px;height:18px;vertical-align:middle"')} بجانبه، ثم استمع للقائمة متتابعة.</p>`;
+  return `<div class="lessons">${ls.map((l, i) => {
+    const v = lessonIndex.get(l[0]), id = l[0];
+    const where = v.cat ? `<a href="#c-${v.cat}">${esc(C[v.cat].t)}</a>` : `<a href="#s-${v.sec}">${esc(secByKey[v.sec].t)}</a>`;
+    return `<div class="lesson ${heard.has(id) ? 'heard' : ''}" data-id="${id}"><button class="play" type="button" data-play="${id}" data-q="m" aria-label="تشغيل">${I.play}</button>
+      <div><div class="t">${esc(lessonTitle(l[1]))}</div><div class="sub"><span class="num">${N(i + 1)}</span>${where}${resume[id] ? `<span>توقفت عند ${fmt(resume[id])}</span>` : ''}</div></div>
+      <div class="acts">${i ? `<button type="button" data-mymove="${id}" data-dir="-1" aria-label="قدّمه في القائمة">${I.up}</button>` : ''}${i < ls.length - 1 ? `<button type="button" data-mymove="${id}" data-dir="1" aria-label="أخّره في القائمة">${I.down}</button>` : ''}
+      <button type="button" data-mylist="${id}" aria-label="احذفه من قائمتي">${I.x}</button></div></div>`;
+  }).join('')}</div>`;
+}
+function setMine(next) {
+  mylist = next; store.set('mylist', mylist);
+  document.querySelectorAll('[data-mylist]').forEach(b => { if (!b.closest('#myList')) b.setAttribute('aria-pressed', mylist.includes(Number(b.dataset.mylist))); });
+  if (cur) $('#qMine').setAttribute('aria-pressed', mylist.includes(cur[0]));
+  const box = $('#myList'); if (box) { box.innerHTML = myListBody(); $('#myTools').innerHTML = myTools(); fixLinks(box); markPlaying(); }
 }
 const notFound = () => `<div class="wrap"><div class="empty-note">الصفحة غير موجودة. <a href="#" style="color:var(--brand)">العودة للرئيسية</a></div></div>`;
 
@@ -593,6 +646,7 @@ function queueFor(key) {
   if (list && list.q === key && $('#lessonList')) return listRows().rows.map(m => m.l).filter(playable);
   if (key.startsWith('c-')) return collectLessons(C[Number(key.slice(2))]).filter(playable);
   if (key.startsWith('s-')) return (secByKey[key.slice(2)]?.l || []).filter(playable);
+  if (key === 'm') return myLessons();
   return [];
 }
 function setQueue(key, ls, i) {
@@ -633,7 +687,8 @@ function load(autoplay) {
   const startAt = resume[l[0]] || 0;
   audio.addEventListener('loadedmetadata', () => { if (startAt && startAt < audio.duration - 30) audio.currentTime = startAt; }, { once: true });
   if (autoplay) audio.play().catch(() => { });
-  store.set('last', { id: l[0] });
+  store.set('last', { id: l[0] }); noteSeries(l[0]);
+  $('#qMine').setAttribute('aria-pressed', mylist.includes(l[0]));
   setMeta($('#pSeries').textContent);
   markPlaying();
 }
@@ -729,6 +784,7 @@ function sleepTick() {
   left.textContent = 'يتوقف بعد ' + fmt(ms / 1000);
 }
 $('#qSleep').onchange = e => setSleep(e.target.value);
+$('#qMine').onclick = () => { if (cur) setMine(mylist.includes(cur[0]) ? mylist.filter(x => x !== cur[0]) : [...mylist, cur[0]]); };
 
 // ---------- events ----------
 document.addEventListener('click', e => {
@@ -736,7 +792,28 @@ document.addEventListener('click', e => {
   const t = e.target.closest('button,[data-q]'); if (!t) return;
   if (t.dataset.play) { const id = Number(t.dataset.play); if (cur && cur[0] === id) { audio.paused ? audio.play().catch(() => { }) : audio.pause(); } else playLesson(id, t.dataset.q || ''); return; }
   if (t.dataset.playall) { const k = t.dataset.playall, ls = queueFor(k); if (!ls.length) return; setQueue(k, ls, 0); load(true); return; }
-  if (t.dataset.continue) { const k = t.dataset.continue, ls = queueFor(k); if (!ls.length) return; setQueue(k, ls, Math.max(0, ls.findIndex(l => !heard.has(l[0])))); load(true); return; }
+  if (t.dataset.continue) {  // where this series was left, else its first lesson not yet heard
+    const k = t.dataset.continue, ls = queueFor(k); if (!ls.length) return;
+    const e = spos.find(x => x.k === seriesKey(ls[0][0]));
+    let i = e && !heard.has(e.id) ? ls.findIndex(l => l[0] === e.id) : -1;
+    if (i < 0) i = Math.max(0, ls.findIndex(l => !heard.has(l[0])));
+    setQueue(k, ls, i); load(true); return;
+  }
+  if (t.dataset.resume) {  // a card on the home page: the same lesson and second, in the order it was being played
+    const k = t.dataset.resume, e = spos.find(x => x.k === k); if (!e) return;
+    const sq = store.get('queue', null);
+    let ls = sq && Array.isArray(sq.ids) && sq.ids.includes(e.id) ? sq.ids.map(id => lessonIndex.get(id)?.l).filter(playable) : queueFor(k), i = ls.findIndex(l => l[0] === e.id);
+    if (i < 0) { ls = queueFor(k); i = ls.findIndex(l => l[0] === e.id); }
+    if (i < 0) return;
+    if (heard.has(e.id) && i < ls.length - 1) i++;  // that lesson was finished: go on to the next
+    setQueue(sq && sq.ids && sq.ids.includes(e.id) ? sq.k : k, ls, i); load(true); return;
+  }
+  if (t.dataset.mylist) { const id = Number(t.dataset.mylist); setMine(mylist.includes(id) ? mylist.filter(x => x !== id) : [...mylist, id]); return; }
+  if (t.dataset.mymove) {
+    const id = Number(t.dataset.mymove), i = mylist.indexOf(id), j = i + Number(t.dataset.dir); if (i < 0 || j < 0 || j >= mylist.length) return;
+    const next = mylist.slice(); [next[i], next[j]] = [next[j], next[i]]; setMine(next); return;
+  }
+  if (t.dataset.myclear) { if (confirm('إفراغ قائمتك؟')) setMine([]); return; }
   if (t.dataset.heard) { const id = Number(t.dataset.heard); setHeard(id, !heard.has(id)); return; }
   if (t.dataset.save) { const id = Number(t.dataset.save); saved.has(id) ? saved.delete(id) : saved.add(id); store.set('saved', [...saved]); route(); return; }
   if (t.dataset.more) {
