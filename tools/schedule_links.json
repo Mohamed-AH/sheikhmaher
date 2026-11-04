@@ -1,0 +1,28 @@
+{
+  "_": "The weekly lesson schedule (tools/schedule.py). live: true shows the live-stream button again. links: a phrase from the original schedule → the page on our site that holds its recorded lessons (c-<series id> or t-<text key>). A phrase not listed here simply shows without a link.",
+  "live": false,
+  "live_url": "https://mixlr.com/assunan",
+  "map_url": "https://www.google.com/maps/search/?api=1&query=%D8%AC%D8%A7%D9%85%D8%B9+%D8%A8%D9%84%D8%A7%D9%84+%D8%A8%D9%86+%D8%B1%D8%A8%D8%A7%D8%AD+%D9%85%D8%B4%D8%B1%D9%81%D8%A9+%D8%AC%D8%AF%D8%A9",
+  "links": [
+    ["صفة الجنة", "c-632"],
+    ["الفرقان بين الحق", "c-560"],
+    ["الآداب الشرعية", "c-338"],
+    ["مختصر زاد المعاد", "c-839"],
+    ["نزهة النظر", "c-754"],
+    ["العمريطي", "c-755"],
+    ["تفسير ابن كثير", "c-436"],
+    ["مختصر سيره النبي", "c-635"],
+    ["اقتضاء الصراط المستقيم", "c-6"],
+    ["سنن لأبي داود", "c-14"],
+    ["أبي داود", "c-14"],
+    ["صحيح الإمام مسلم", "c-12"],
+    ["جامع الترمذي", "c-842"],
+    ["موطأ الإمام مالك", "c-13"],
+    ["سنن النسائي", "c-15"],
+    ["صحيح الإمام البخاري", "c-3"],
+    ["جامع الأصول", "c-18"],
+    ["جامع بيان العلم", "c-312"],
+    ["الملخص الفقهي", "c-17"],
+    ["أصول اعتقاد أهل السنة", "t-lalikai"]
+  ]
+}
