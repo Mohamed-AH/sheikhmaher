@@ -78,9 +78,26 @@
     </div>
     <div class="ctrl side">
       <button class="speed" id="pSpeed" type="button" aria-label="سرعة التشغيل">١×</button>
+      <button class="icon-btn" data-skip="-15" type="button" aria-label="رجوع ١٥ ثانية"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><text x="12" y="15.5" font-size="8" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui,sans-serif">١٥</text></svg></button>
+      <button class="icon-btn" data-skip="15" type="button" aria-label="تقديم ١٥ ثانية"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/><text x="12" y="15.5" font-size="8" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui,sans-serif">١٥</text></svg></button>
       <a class="icon-btn" id="pDl" href="#" target="_blank" rel="noopener" aria-label="تنزيل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg></a>
     </div>
+    <button class="icon-btn p-queue" id="pQueue" type="button" aria-label="قائمة التشغيل" aria-expanded="false" aria-controls="qPanel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h11M4 11h11M4 16h7"/><path d="M15 14.5v6l5-3z" fill="currentColor" stroke="none"/></svg><i class="dot" hidden></i></button>
     <button class="icon-btn p-close" id="pClose" type="button" aria-label="إغلاق المشغّل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="qpanel" id="qPanel" role="dialog" aria-labelledby="qTitle" hidden>
+    <div class="qhead"><div><b id="qTitle">قائمة التشغيل</b><span id="qPos" class="num"></span></div>
+      <button class="icon-btn" id="qClose" type="button" aria-label="إغلاق قائمة التشغيل"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="qtools">
+      <button class="icon-btn" data-skip="-15" type="button" aria-label="رجوع ١٥ ثانية"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><text x="12" y="15.5" font-size="8" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui,sans-serif">١٥</text></svg></button>
+      <button class="icon-btn" data-skip="15" type="button" aria-label="تقديم ١٥ ثانية"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/><text x="12" y="15.5" font-size="8" text-anchor="middle" fill="currentColor" stroke="none" font-family="system-ui,sans-serif">١٥</text></svg></button>
+      <button class="speed" id="qSpeed" type="button" aria-label="سرعة التشغيل">١×</button>
+      <a class="icon-btn" id="qDl" href="#" target="_blank" rel="noopener" aria-label="تنزيل الدرس"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg></a>
+      <label class="sleep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span class="sr-only">مؤقت الإيقاف</span>
+        <select id="qSleep"><option value="">مؤقت الإيقاف</option><option value="lesson">بعد هذا الدرس</option><option value="15">بعد ١٥ دقيقة</option><option value="30">بعد ٣٠ دقيقة</option><option value="60">بعد ساعة</option></select></label>
+      <span class="sleep-left num" id="qSleepLeft" aria-live="polite"></span>
+    </div>
+    <ol class="qlist" id="qList"></ol>
   </div>
   <audio id="audio" preload="none"></audio>
 </section>

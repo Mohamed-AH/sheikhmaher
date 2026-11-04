@@ -181,7 +181,7 @@ def lessons_html(ls):
 
 if os.path.exists(OUT): shutil.rmtree(OUT)
 os.makedirs(OUT)
-for f in ['styles.css', 'app.js', 'favicon.svg', 'og.png']:
+for f in ['styles.css', 'app.js', 'favicon.svg', 'og.png', 'icon-512.png']:
     if os.path.exists(os.path.join(ROOT, f)): shutil.copy(os.path.join(ROOT, f), OUT)
 shutil.copytree(os.path.join(ROOT, 'data'), os.path.join(OUT, 'data'), ignore=shutil.ignore_patterns('report.json'))
 open(os.path.join(OUT, CAT_PATH), 'w', encoding='utf-8').write(CAT_JSON)
