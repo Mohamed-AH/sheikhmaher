@@ -24,6 +24,7 @@ CAT_RE=re.compile(r'<a[^>]*href="https://maheralqahtani\.org/page/(\d+)\?categor
 FILE_RE=re.compile(r'<tr>\s*<th scope="row">\d+</th>\s*<td><a href="https://maheralqahtani\.org/details/(\d+)"[^>]*>(.*?)</a></td>\s*<td[^>]*>\s*<a href="([^"]*)"',re.S)
 ART_RE=re.compile(r'<a\s+href="https://maheralqahtani\.org/details/(\d+)">([^<]+)</a>(.*?)class="btn-more"',re.S)
 YT_RE=re.compile(r'<iframe[^>]*src="https?://(?:www\.)?youtube\.com/embed/([\w-]+)"')
+SEC_RE=re.compile(r'data-section="(\d+)"')
 NEXT_RE=re.compile(r'<a class="page-link" href="([^"]+)" rel="next"')
 def crawl_listing(url):
     """returns dict with cats, files, articles, videos following pagination"""
@@ -42,6 +43,18 @@ def crawl_listing(url):
             body=clean(m.group(3)); ago=re.match(r'(منذ [^\s]+ [^\s]+)',body)
             res['articles'].append({'id':int(m.group(1)),'title':clean(m.group(2)),'ago':ago.group(1) if ago else '','excerpt':body[len(ago.group(1)) if ago else 0:].strip()[:300]})
         for m in YT_RE.finditer(r): res['videos'].append(m.group(1))
+        # a section page shows only the first rows of each series table; «التالية» loads the rest through
+        # /paginate/section/categories, so read every page of every table here
+        for sec in dict.fromkeys(SEC_RE.findall(s)):
+            have={c['id'] for c in res['cats']}
+            for page in range(1, 200):
+                try: part=json.loads(fetch(f'{BASE}/paginate/section/categories?page={page}&section_id={sec}') or '{}')['data']['html']
+                except Exception: part=''
+                new=[m for m in CAT_RE.finditer(part) if int(m.group(2)) not in have]
+                if not new and page > 1: break
+                for m in new:
+                    have.add(int(m.group(2)))
+                    res['cats'].append({'page':int(m.group(1)),'id':int(m.group(2)),'title':clean(m.group(3)),'count':int(m.group(4))})
         n=NEXT_RE.search(r); url=html.unescape(n.group(1)) if n else None
     return res
 data={'sections':{},'cats':{}}

@@ -327,3 +327,14 @@ footer.site a, .lede a, .empty-note a, .page-head p a, .block p a { text-decorat
 .list-tools .toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: .9rem; cursor: pointer; }
 .list-tools .toggle input { accent-color: var(--brand); width: 16px; height: 16px; }
 .list-tools .count { font-size: .85rem; color: var(--muted); }
+.videos .more { grid-column: 1 / -1; border-top: 0; }
+/* the videos section: series folded under topics */
+.vgroup { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); margin-bottom: 12px; }
+.vgroup > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; font-weight: 600; }
+.vgroup > summary::-webkit-details-marker { display: none; }
+.vgroup > summary::after { content: ""; width: 9px; height: 9px; border: solid var(--muted); border-width: 0 0 2px 2px; transform: rotate(-45deg); margin-inline-start: 4px; flex: none; transition: transform .15s; }
+.vgroup[open] > summary::after { transform: rotate(135deg); }
+.vgroup > summary .t { flex: 1; }
+.vgroup > summary .c { color: var(--muted); font-weight: 400; font-size: .85rem; }
+.vgroup > .series-list { padding: 0 12px 12px; }
+@media (max-width: 600px) { .vgroup > summary { flex-wrap: wrap; } .vgroup > summary .c { order: 3; flex-basis: 100%; } }
