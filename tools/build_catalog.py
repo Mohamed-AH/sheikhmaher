@@ -490,7 +490,7 @@ for b in BOOKS['texts']:
         if p['note']: note[i] = p['note']
         if out_cats[i].get('x'): out_cats[i]['t'] = head[i]  # grouped series take the proper name too
     texts.append({'k': b['key'], 't': b['t'], 'by': b.get('by', ''), 'ids': ids, 'lab': lab, 'h': head, 'note': note,
-                  'n': sum(out_cats[i]['n'] for i in ids)})
+                  'n': sum(out_cats[i]['n'] for i in ids), **({'also': b['also']} if b.get('also') else {})})
 
 built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 json.dump({'built': built, 'sections': sections, 'cats': out_cats, 'texts': texts}, open(OUT, 'w'), ensure_ascii=False, separators=(',', ':'))

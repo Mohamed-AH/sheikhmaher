@@ -193,13 +193,14 @@ function textCard(t) {
     </div></div></a>`;
 }
 // a section's series with every multi-explained text folded into one card
-function shelfItems(list) {
+function shelfItems(list, key) {
   const out = [], seen = new Set();
   list.forEach(c => {
     const t = textOf[c.id];
     if (!t) out.push([c.n, bookCard(c)]);
     else if (!seen.has(t.k)) { seen.add(t.k); out.push([t.n, textCard(t)]); }
   });
+  T.forEach(t => { if (key && (t.also || []).includes(key) && !seen.has(t.k)) { seen.add(t.k); out.push([t.n, textCard(t)]); } });  // books of two subjects
   return out.sort((a, b) => b[0] - a[0]).map(x => x[1]).join('');
 }
 function lessonRow(l, catId, queueKey, m) {
@@ -318,7 +319,7 @@ function libraryBody(q) {
     const list = s.series.map(id => C[id]).filter(c => c && (!nq || norm(c.t).includes(nq) || (textOf[c.id] && norm(textOf[c.id].t).includes(nq))));
     if (!list.length && (nq || !s.n)) return '';
     return `<section class="block"><div class="block-head"><h2>${esc(s.t)}</h2><a class="btn" href="#s-${s.key}">${cnt(s.n, 'item')}</a></div>
-      ${list.length ? `<div class="series-list">${shelfItems(list)}</div>` : `<p style="color:var(--muted)">مواد هذا القسم غير مقسّمة إلى سلاسل. <a href="#s-${s.key}" style="color:var(--brand)">تصفحها</a></p>`}</section>`;
+      ${list.length ? `<div class="series-list">${shelfItems(list, nq ? null : s.key)}</div>` : `<p style="color:var(--muted)">مواد هذا القسم غير مقسّمة إلى سلاسل. <a href="#s-${s.key}" style="color:var(--brand)">تصفحها</a></p>`}</section>`;
   }).join('');
 }
 function viewSection(key) {
@@ -326,7 +327,7 @@ function viewSection(key) {
   const list = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => b.n - a.n);
   const withLessons = list.filter(c => c.n), empty = list.filter(c => !c.n);
   let body = '';
-  if (list.length) body += `<div class="series-list">${shelfItems(withLessons)}</div>`;
+  if (list.length) body += `<div class="series-list">${shelfItems(withLessons, key)}</div>`;
   if (s.l.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.l, l => lessonRow(l, null, 's-' + key))}</div>`;
   if (s.a.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.a, articleRow, 40)}</div>`;
   if (empty.length) body += `<p style="color:var(--muted);margin-top:22px">سلاسل أخرى في هذا القسم: ${empty.map(c => esc(c.t)).join('، ')}</p>`;

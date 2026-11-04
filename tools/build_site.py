@@ -130,13 +130,15 @@ TEXT_OF = {i: t for t in TEXTS for i in t['ids']}
 def text_card(t):
     return (f'<a class="book text" href="text/{t["k"]}/"><div class="spine stack"><span class="num">{N(len(t["ids"]))}</span></div>'
             f'<div><h3>{e(t["t"])}</h3><div class="by">{e(t["by"])}</div><div class="meta"><span>{cnt(len(t["ids"]), "sharh")}</span><span>{cnt(t["n"], "lesson")}</span></div></div></a>')
-def shelf(ids):
+def shelf(ids, key=None):
     out, seen = [], set()
     for i in ids:
         if not C[i]['n']: continue
         t = TEXT_OF.get(i)
         if not t: out.append((C[i]['n'], book_card(i)))
         elif t['k'] not in seen: seen.add(t['k']); out.append((t['n'], text_card(t)))
+    for t in TEXTS:  # books that belong to two subjects, e.g. بلوغ المرام in الحديث and الفقه
+        if key in t.get('also', []) and t['k'] not in seen: seen.add(t['k']); out.append((t['n'], text_card(t)))
     return ''.join(h for _, h in sorted(out, key=lambda x: -x[0]))
 
 def lessons_html(ls):
@@ -175,7 +177,7 @@ page('', '', home_desc, home, extra_ld=site_ld)
 # simple app pages (rendered by the app; noindex for personal / dynamic ones)
 page('library/', 'المكتبة', f'كل الكتب والسلاسل المشروحة ل{SHEIKH}، مرتبة حسب الأقسام.',
      '<div class="page-head"><div class="wrap"><h1 class="kufi">المكتبة كاملة</h1></div></div><div class="wrap">'
-     + ''.join(f'<section class="block"><h2>{e(s["t"])}</h2><div class="series-list">' + shelf(s['series']) + '</div></section>' for s in S if s['series'])
+     + ''.join(f'<section class="block"><h2>{e(s["t"])}</h2><div class="series-list">' + shelf(s['series'], s['key']) + '</div></section>' for s in S if s['series'])
      + '</div>', crumbs=[('الرئيسية', ''), ('المكتبة', 'library/')])
 sitemap.append(('library/', .8))
 page('start/', 'ابدأ من هنا', f'طريق مقترح لطالب العلم الجديد في دروس {SHEIKH}: متون مختصرة مرتبة من الأيسر إلى الأوسع.',
@@ -191,7 +193,7 @@ for s in S:
     cr = [('الرئيسية', ''), ('المكتبة', 'library/'), (s['t'], path)]
     body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1 class="kufi">{e(s["t"])}</h1>'
             f'<div class="meta"><span class="pill num">{cnt(s["n"], "item")}</span></div></div></div><div class="wrap" style="padding-block:24px">'
-            + (f'<div class="series-list">' + shelf(s['series']) + '</div>' if s['series'] else '')
+            + (f'<div class="series-list">' + shelf(s['series'], s['key']) + '</div>' if s['series'] else '')
             + (lessons_html(s['l'][:300]) if s['l'] else '')
             + (''.join(f'<a class="article" href="{ORIGIN}/details/{int(a[0])}" target="_blank" rel="noopener"><h3>{e(a[1])}</h3><p>{e(a[2])}</p></a>' for a in s['a']) if s['a'] else '')
             + '</div>')
