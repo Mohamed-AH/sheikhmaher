@@ -82,6 +82,8 @@ const I = {
   up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
   down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  live: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
   yt: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,.55)"/><path d="M10 8v8l6-4z" fill="#fff"/></svg>',
 };
 const GLYPH = {
@@ -106,11 +108,11 @@ const norm = s => String(s || '').replace(/[ً-ٰٟـ]/g, '').replace(/[إأآٱ
   .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
 // ---------- data ----------
-let C, S, T = [], textByKey = {}, textOf = {}, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = null;
+let SCH = null, C, S, T = [], textByKey = {}, textOf = {}, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = null;
 const FILES = 'https://maheralqahtani.org/lfm/files/admin/';  // the catalog shortens this common start of audio links to "~"
 const fileUrl = u => u && u[0] === '~' ? FILES + u.slice(1) : u;
 function prep(data) {
-  C = data.cats; S = data.sections;
+  C = data.cats; S = data.sections; SCH = data.schedule || null;
   S.forEach(s => {
     secByKey[s.key] = s;
     const walk = (id, depth) => { if (catSection[id] || !C[id] || depth > 12) return; catSection[id] = s.key; C[id].kids.forEach(k => walk(k, depth + 1)); };
@@ -290,6 +292,7 @@ function viewHome() {
       <div class="stat"><b class="num">${N(S.filter(s => s.n).length)}</b><span>قسماً علمياً</span></div>
     </div>
   </div></section>
+  ${todayStrip()}
   ${listening(4) ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع الاستماع</h2><a class="btn" href="#mine">متابعتي</a></div><div class="series-list">${listening(4)}</div></div></section>`
     : cont.length ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع من حيث توقفت</h2></div><div class="series-list">${cont.map(c => bookCard(c, true)).join('')}</div></div></section>` : ''}
   <section class="block"><div class="wrap">
@@ -608,6 +611,144 @@ function setMine(next) {
   if (cur) $('#qMine').setAttribute('aria-pressed', mylist.includes(cur[0]));
   const box = $('#myList'); if (box) { box.innerHTML = myListBody(); $('#myTools').innerHTML = myTools(); fixLinks(box); markPlaying(); }
 }
+// ---------- the weekly lesson schedule (read nightly from the original home page) ----------
+// approximate prayer times for the mosque in Jeddah (Umm al-Qura's Fajr angle; Asr at one shadow length), in minutes after midnight, Makkah time
+const JED = { lat: 21.55, lng: 39.2, tz: 3 };
+function prayerTimes(y, m, d) {
+  const rad = x => x * Math.PI / 180, deg = x => x * 180 / Math.PI, fix = (a, b) => { a = a - b * Math.floor(a / b); return a < 0 ? a + b : a; };
+  if (m <= 2) { y -= 1; m += 12; }
+  const A = Math.floor(y / 100), jd0 = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + 2 - A + Math.floor(A / 4) - 1524.5 - JED.lng / (15 * 24);
+  const sun = t => {
+    const D = jd0 + t / 24 - 2451545, g = fix(357.529 + .98560028 * D, 360), q = fix(280.459 + .98564736 * D, 360);
+    const L = fix(q + 1.915 * Math.sin(rad(g)) + .02 * Math.sin(rad(2 * g)), 360), e = 23.439 - .00000036 * D;
+    const ra = fix(deg(Math.atan2(Math.cos(rad(e)) * Math.sin(rad(L)), Math.cos(rad(L)))) / 15, 24);
+    return { decl: deg(Math.asin(Math.sin(rad(e)) * Math.sin(rad(L)))), eqt: q / 15 - ra };
+  };
+  const noon = t => fix(12 - sun(t).eqt, 24);
+  const at = (angle, t, ccw) => { const { decl } = sun(t); const x = 1 / 15 * deg(Math.acos((-Math.sin(rad(angle)) - Math.sin(rad(decl)) * Math.sin(rad(JED.lat))) / (Math.cos(rad(decl)) * Math.cos(rad(JED.lat))))); return noon(t) + (ccw ? -x : x); };
+  const asrAngle = t => -deg(Math.atan(1 / (1 + Math.tan(rad(Math.abs(JED.lat - sun(t).decl))))));
+  const local = h => Math.round((h + JED.tz - JED.lng / 15) * 60);
+  return { fajr: local(at(18.5, 5, true)), dhuhr: local(noon(12)), asr: local(at(asrAngle(15), 15)), maghrib: local(at(.833, 18)) };
+}
+const makkahNow = () => { const d = new Date(Date.now() + 3 * 3600e3); return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), day: (d.getUTCDay() + 1) % 7, min: d.getUTCHours() * 60 + d.getUTCMinutes(), t: d }; };
+const dayDate = (now, k) => { const t = new Date(now.t.getTime() + k * 864e5); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() }; };
+const clock = min => { const h = Math.floor(min / 60), m = min % 60, pm = h >= 12; return `${N(((h + 11) % 12) + 1)}:${N(m).padStart(2, '٠')} ${pm ? 'م' : 'ص'}`; };
+const inMin = n => n < 60 ? `بعد ${N(n)} دقيقة` : `بعد ${N(Math.floor(n / 60))} س${n % 60 ? ` و${N(n % 60)} د` : ''}`;
+const schedCells = d => { const seen = new Set(); return SCH.cells.filter(x => x.d[0] <= d && d <= x.d[1]).sort((a, b) => a.c[0] - b.c[0]).filter(x => !seen.has(x) && seen.add(x)); };
+const slotName = x => x.c[1] > x.c[0] ? (x.d[0] === 6 ? 'بعد صلاة الجمعة' : SCH.cols.slice(x.c[0], x.c[1] + 1).join(' و')) : SCH.cols[x.c[0]];
+// the start of a cell's session on a given day, from that day's prayer times; Friday's is after the Friday prayer
+function slotStart(x, date, day) {
+  const p = prayerTimes(date.y, date.m, date.d);
+  if (day === 6 && x.c[1] > x.c[0]) return p.dhuhr;
+  return [p.fajr, p.asr, p.maghrib][x.c[0]] ?? p.maghrib;
+}
+// the lesson on now, or the next one: up to a week ahead
+function nextLesson() {
+  const now = makkahNow();
+  for (let k = 0; k < 8; k++) {
+    const day = (now.day + k) % 7, date = dayDate(now, k);
+    for (const x of schedCells(day)) {
+      const st = slotStart(x, date, day), left = k * 1440 + st - now.min;
+      if (left > -60) return { x, k, day, st, left };
+    }
+  }
+  return null;
+}
+const dayRange = x => x.d[0] === x.d[1] ? '' : `من ${SCH.days[x.d[0]]} إلى ${SCH.days[x.d[1]]}`;
+const schedRef = r => r.startsWith('c-') ? C[Number(r.slice(2))] : r.startsWith('t-') ? textByKey[r.slice(2)] : null;
+function schedLinks(x, limit) {
+  return x.l.slice(0, limit || 9).map(([r, label]) => {
+    const c = schedRef(r);
+    if (!c) return '';
+    return `<a class="sched-link" href="#${esc(r)}" title="${esc(c.t)}"><span>${esc(label)}</span><b class="num">${cnt(c.n, 'lesson')}</b></a>`;
+  }).join('');
+}
+// the text as the schedule writes it; inline, the names of recorded series become links in place
+function schedText(x, inline) {
+  const t = x.t, hits = [];
+  if (inline) for (const [r, , sub] of x.l) {
+    const c = schedRef(r), k = c && sub ? t.indexOf(sub) : -1;
+    if (k >= 0 && !hits.some(h => k < h.e && h.k < k + sub.length)) hits.push({ k, e: k + sub.length, r, c });
+  }
+  hits.sort((p, q) => p.k - q.k);
+  let h = '', at = 0;
+  for (const { k, e, r, c } of hits) {
+    h += esc(t.slice(at, k)) + `<a class="in-link" href="#${esc(r)}" title="${esc(c.t)} · ${cnt(c.n, 'lesson')}">${esc(t.slice(k, e))}</a>`;
+    at = e;
+  }
+  return (h + esc(t.slice(at))).replace(/\n/g, '<br>');
+}
+function slotCard(x, day, now, nx) {
+  const today = day === now.day, st = slotStart(x, today ? now : dayDate(now, (day - now.day + 7) % 7), day);
+  let tag = '', cls = '';
+  if (today) {
+    if (now.min > st + 60) { tag = '<span class="tag done">انتهى</span>'; cls = ' done'; }
+    else if (now.min >= st) { tag = '<span class="tag now">الآن تقريباً</span>'; cls = ' next'; }
+    else if (nx && nx.x === x && nx.k === 0) { tag = `<span class="tag next">التالي · ${inMin(st - now.min)}</span>`; cls = ' next'; }
+  }
+  return `<article class="slot${cls}"><div class="slot-head"><b>${esc(slotName(x))} <span class="num">≈ ${clock(st)}</span></b>${tag}</div>
+    <div class="slot-t">${schedText(x)}</div>${dayRange(x) ? `<div class="slot-days">${dayRange(x)}</div>` : ''}
+    ${x.l.length ? `<div class="sched-links">${schedLinks(x)}</div>` : ''}</article>`;
+}
+let schedDay = null;
+function schedDayBody(day) {
+  const now = makkahNow(), nx = nextLesson();
+  return schedCells(day).map(x => slotCard(x, day, now, nx)).join('') || '<div class="empty-note">لا دروس في هذا اليوم.</div>';
+}
+function liveBtn(cls) {
+  return SCH.live && SCH.live_url ? `<a class="btn ${cls || ''}" href="${esc(SCH.live_url)}" target="_blank" rel="noopener">${I.live} البث المباشر</a>`
+    : `<span class="btn off ${cls || ''}" aria-disabled="true" title="البث المباشر متوقف حالياً">${I.live} البث متوقف حالياً</span>`;
+}
+function viewSchedule() {
+  if (!SCH) return notFound();
+  const now = makkahNow(), nx = nextLesson();
+  if (schedDay == null) schedDay = now.day;
+  const p = prayerTimes(now.y, now.m, now.d);
+  const hijri = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Riyadh' }).format(new Date());
+  const next = nx ? `<section class="sched-next" aria-label="الدرس التالي">
+      <div class="row"><span class="pill">${nx.left <= 0 ? 'الآن تقريباً' : nx.k === 0 ? 'الدرس التالي · اليوم' : nx.k === 1 ? 'الدرس التالي · غداً' : `الدرس التالي · ${SCH.days[nx.day]}`} ${esc(slotName(nx.x))}</span>
+      ${nx.left > 0 ? `<span>${inMin(nx.left)}</span>` : ''}</div>
+      <div class="t">${schedText(nx.x)}</div>
+      <div class="row sub"><span>${esc(slotName(nx.x))} ≈ ${clock(nx.st)} بتوقيت مكة</span></div>
+      <div class="acts">${liveBtn('light')}${nx.x.l.length ? schedLinks(nx.x, 2).replace(/class="sched-link"/g, 'class="sched-link light"') : ''}</div></section>` : '';
+  // the week: sessions down, days across; a session that repeats is one bar across its days
+  const grid = `<div class="week" role="table" aria-label="جدول الأسبوع">
+    <div class="wk-corner" role="presentation"></div>
+    ${SCH.days.map((d, i) => `<div class="wk-day${i === now.day ? ' today' : ''}${i === 6 ? ' fri' : ''}" role="columnheader" style="grid-column:${i + 2};grid-row:1">${esc(d)}${i === now.day ? '<small>اليوم</small>' : ''}</div>`).join('')}
+    ${SCH.cols.map((c, i) => `<div class="wk-slot" role="rowheader" style="grid-row:${i + 2};grid-column:1"><b>${esc(c)}</b><small class="num">≈ ${clock([p.fajr, p.asr, p.maghrib][i])}</small></div>`).join('')}
+    ${SCH.cells.map(x => {
+      const isNext = nx && nx.x === x, today = x.d[0] <= now.day && now.day <= x.d[1];
+      return `<div class="wk-cell${x.d[0] === 6 ? ' fri' : ''}${isNext ? ' next' : ''}${today ? ' today' : ''}" role="cell" style="grid-column:${x.d[0] + 2}/${x.d[1] + 3};grid-row:${x.c[0] + 2}/${x.c[1] + 3}">
+        ${isNext ? `<span class="tag next">${nx.left <= 0 ? 'الآن تقريباً' : 'التالي'}</span>` : ''}${x.d[0] === 6 ? '<b class="fri-h">بعد صلاة الجمعة</b>' : ''}
+        ${dayRange(x) ? `<div class="slot-days">${dayRange(x)}</div>` : ''}<div class="slot-t">${schedText(x, true)}</div></div>`;
+    }).join('')}</div>`;
+  const tel = SCH.phone ? `<a class="btn" href="tel:${esc(SCH.phone)}">اتصل</a>` : '', mail = SCH.email ? `<a class="btn" href="mailto:${esc(SCH.email)}">راسلنا بالبريد</a>` : '';
+  return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>جدول الدروس</span></div>
+    <h1 class="kufi">جدول الدروس العلمية</h1>
+    <p class="byline sheikh">لفضيلة الشيخ <b>ماهر بن ظافر القحطاني</b> حفظه الله</p>
+    <p style="color:var(--muted);margin:6px 0 0">${esc(SCH.place)} · ${esc(hijri)}</p></div></div>
+  <div class="wrap sched">
+    ${next}
+    <div class="sched-days" role="group" aria-label="أيام الأسبوع">${SCH.days.map((d, i) => `<button type="button" class="chip${i === now.day ? ' is-today' : ''}" data-sday="${i}" aria-pressed="${i === schedDay}">${esc(d)}</button>`).join('')}</div>
+    <div class="sched-day" id="schedDay">${schedDayBody(schedDay)}</div>
+    ${grid}
+    <section class="sched-info" aria-label="الحضور والاستماع">
+      ${SCH.live ? `<a class="info-card" href="${esc(SCH.live_url)}" target="_blank" rel="noopener"><span class="ic">${I.live}</span><span><b>البث المباشر</b><small>إذاعة معرفة السنن والآثار ↗</small></span></a>`
+        : `<div class="info-card off" aria-disabled="true"><span class="ic">${I.live}</span><span><b>البث المباشر</b><small>متوقف حالياً، ويعود هنا حين يُستأنف</small></span></div>`}
+      ${SCH.map_url ? `<a class="info-card" href="${esc(SCH.map_url)}" target="_blank" rel="noopener"><span class="ic warm">${I.pin}</span><span><b>${esc(SCH.place.replace(/^جميع الدروس (في|فى)\s*/, '')) || 'موقع المسجد'}</b><small>افتح الموقع في الخرائط ↗</small></span></a>` : ''}
+      ${tel || mail ? `<div class="info-card"><span><b>للتواصل</b><small>من الموقع الأصلي</small></span><span class="acts">${mail}${tel}</span></div>` : ''}
+    </section>
+    <p class="sched-note">الجدول منقول من <a href="${ORIGIN}/" target="_blank" rel="noopener">الصفحة الرئيسية للموقع الأصلي</a> ويُحدَّث معه كل ليلة. الأوقات تقريبية لمدينة جدة، محسوبة من مواقيت الصلاة، وكل رابط يفتح ما سُجّل من الكتاب في المكتبة.</p>
+  </div>`;
+}
+// the home page: today's sessions
+function todayStrip() {
+  if (!SCH) return '';
+  const now = makkahNow(), nx = nextLesson(), cells = schedCells(now.day);
+  if (!cells.length) return '';
+  return `<section class="block"><div class="wrap"><div class="block-head"><h2>دروس اليوم</h2><a class="btn" href="#schedule">جدول الأسبوع</a></div>
+    <div class="sched-strip">${cells.map(x => slotCard(x, now.day, now, nx)).join('')}</div></div></section>`;
+}
 const notFound = () => `<div class="wrap"><div class="empty-note">الصفحة غير موجودة. <a href="#" style="color:var(--brand)">العودة للرئيسية</a></div></div>`;
 
 // ---------- router ----------
@@ -620,6 +761,7 @@ function route() {
   else if (h === 'start') { html = viewStart(); nav = 'start'; }
   else if (h === 'library') { html = viewLibrary(); nav = 'library'; }
   else if (h === 'mine') { html = viewMine(); nav = 'mine'; }
+  else if (h === 'schedule') { html = viewSchedule(); nav = 'schedule'; }
 
   else if (h === 'search') {
     if (PATH_MODE && !lastQuery) lastQuery = new URLSearchParams(location.search).get('q') || '';
@@ -629,7 +771,7 @@ function route() {
   else if (h.startsWith('t-')) { html = viewText(h.slice(2)); nav = 'library'; title = textByKey[h.slice(2)]?.t; }
   else if (h.startsWith('c-')) { html = viewCat(Number(h.slice(2))); nav = 'library'; title = C[Number(h.slice(2))]?.t; }
   else html = notFound();
-  if (!title) title = { start: 'ابدأ من هنا', library: 'المكتبة', mine: 'متابعتي' }[h] || '';
+  if (!title) title = { start: 'ابدأ من هنا', library: 'المكتبة', mine: 'متابعتي', schedule: 'جدول الدروس' }[h] || '';
   document.title = (title ? title + ' | ' : '') + SITE_NAME;
   app.innerHTML = html;
   fixLinks(app);
@@ -896,6 +1038,10 @@ document.addEventListener('click', e => {
   if (e.target.closest('a.skip')) { e.preventDefault(); app.focus(); return; }
   const t = e.target.closest('button,[data-q]'); if (!t) return;
   if (t.dataset.play) { const id = Number(t.dataset.play); if (cur && cur[0] === id) { audio.paused ? audio.play().catch(() => { }) : audio.pause(); } else playLesson(id, t.dataset.q || ''); return; }
+  if (t.dataset.sday) {
+    schedDay = Number(t.dataset.sday); const box = $('#schedDay'); if (box) { box.innerHTML = schedDayBody(schedDay); fixLinks(box); }
+    document.querySelectorAll('[data-sday]').forEach(b => b.setAttribute('aria-pressed', Number(b.dataset.sday) === schedDay)); return;
+  }
   if (t.dataset.playall) { const k = t.dataset.playall, ls = queueFor(k); if (!ls.length) return; setQueue(k, ls, 0); load(true); return; }
   if (t.dataset.continue) {  // where this series was left, else its first lesson not yet heard
     const k = t.dataset.continue, ls = queueFor(k); if (!ls.length) return;

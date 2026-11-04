@@ -36,6 +36,10 @@ BEACON = os.environ.get('CF_BEACON_TOKEN', '').strip()
 GSC = os.environ.get('GSC_VERIFICATION', '').strip()  # Google Search Console HTML-tag token
 
 cat = json.load(open(os.path.join(ROOT, 'data', 'catalog.json')))
+# the weekly lesson schedule read from the original home page (tools/schedule.py) travels with the catalog
+SCHED_P = os.path.join(ROOT, 'data', 'schedule.json')
+SCHED = json.load(open(SCHED_P, encoding='utf-8')) if os.path.exists(SCHED_P) else None
+if SCHED: cat['schedule'] = SCHED
 # the browser gets a compact copy under a name that changes with its content, so it can keep it for good:
 # audio links lose their common start (the app puts it back) and the JSON has no spaces
 FILES = 'https://maheralqahtani.org/lfm/files/admin/'
@@ -211,6 +215,26 @@ sitemap.append(('library/', .8))
 page('start/', 'ابدأ من هنا', f'طريق مقترح لطالب العلم الجديد في دروس {SHEIKH}: متون مختصرة مرتبة من الأيسر إلى الأوسع.',
      '<div class="page-head"><div class="wrap"><h1 class="kufi">طريق مقترح لطالب العلم الجديد</h1></div></div>', crumbs=[('الرئيسية', ''), ('ابدأ من هنا', 'start/')])
 sitemap.append(('start/', .8))
+if SCHED:  # a plain table for search engines and readers without scripts; the app draws the full page
+    def _cell(d, c):
+        x = next((x for x in SCHED['cells'] if x['d'][0] <= d <= x['d'][1] and x['c'][0] <= c <= x['c'][1]), None)
+        return x
+    rows = []
+    for d, day in enumerate(SCHED['days']):
+        tds, seen = [], set()
+        for c in range(len(SCHED['cols'])):
+            x = _cell(d, c)
+            if x is None: tds.append('<td></td>'); continue
+            if id(x) in seen: continue
+            seen.add(id(x)); span = x['c'][1] - c + 1
+            tds.append(f'<td{f" colspan={span}" if span > 1 else ""}>' + e(x['t']).replace('\n', '<br>') + '</td>')
+        rows.append(f'<tr><th scope="row">{e(day)}</th>' + ''.join(tds) + '</tr>')
+    page('schedule/', 'جدول الدروس', f'جدول الدروس العلمية الأسبوعي ل{SHEIKH}: {SCHED["place"]}، بعد الفجر والعصر والمغرب.',
+         '<div class="page-head"><div class="wrap"><h1 class="kufi">جدول الدروس العلمية</h1>'
+         f'<p>{e(SCHED["place"])}</p></div></div><div class="wrap"><table class="sched-plain"><thead><tr><th>اليوم</th>'
+         + ''.join(f'<th scope="col">{e(c)}</th>' for c in SCHED['cols']) + '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div>',
+         crumbs=[('الرئيسية', ''), ('جدول الدروس', 'schedule/')])
+    sitemap.append(('schedule/', .8))
 page('mine/', 'متابعتي', 'الكتب المحفوظة وآخر ما استمعت إليه.', '<div class="page-head"><div class="wrap"><h1 class="kufi">متابعتي</h1></div></div>', noindex=True)
 page('search/', 'البحث', 'ابحث في عناوين الكتب والدروس.', '<div class="page-head"><div class="wrap"><h1 class="kufi">البحث في المكتبة</h1></div></div>', noindex=True)
 

@@ -8,6 +8,8 @@ python3 -I tools/crawl.py "$W/cache" "$W/data.json"
 python3 -I tools/date_urls.py "$W/data.json" > "$W/urls.txt"
 mkdir -p "$W/dcache" && python3 -I tools/prefetch.py "$W/dcache" "$W/urls.txt" 4
 python3 -I tools/build_catalog.py "$W/data.json" "$W/dcache" "$W/catalog.json" "$W/report.json"
+# the weekly lesson schedule from the home page (keeps the old one if the page can't be read)
+python3 -I tools/schedule.py data/schedule.json
 # titles for videos the site added since last night (only new ones are looked up), then rebuild with them
 python3 -I tools/video_titles.py "$W/catalog.json" data/video_titles.json
 python3 -I tools/build_catalog.py "$W/data.json" "$W/dcache" "$W/catalog.json" "$W/report.json"
