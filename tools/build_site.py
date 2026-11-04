@@ -29,6 +29,19 @@ BEACON = os.environ.get('CF_BEACON_TOKEN', '').strip()
 GSC = os.environ.get('GSC_VERIFICATION', '').strip()  # Google Search Console HTML-tag token
 
 cat = json.load(open(os.path.join(ROOT, 'data', 'catalog.json')))
+# the browser gets a compact copy under a name that changes with its content, so it can keep it for good:
+# audio links lose their common start (the app puts it back) and the JSON has no spaces
+FILES = 'https://maheralqahtani.org/lfm/files/admin/'
+def _compact(o):
+    import copy
+    o = copy.deepcopy(o)
+    for c in list(o['cats'].values()) + o['sections']:
+        for l in c.get('l', []):
+            if isinstance(l[2], str) and l[2].startswith(FILES): l[2] = '~' + l[2][len(FILES):]
+    return json.dumps(o, ensure_ascii=False, separators=(',', ':'))
+CAT_JSON = _compact(cat)
+import hashlib
+CAT_PATH = 'data/c.' + hashlib.sha256(CAT_JSON.encode()).hexdigest()[:10] + '.json'
 C = {int(k): v for k, v in cat['cats'].items()}
 S = cat['sections']
 SEC = {s['key']: s for s in S}
@@ -92,6 +105,8 @@ def page(path, title, desc, body, crumbs=None, noindex=False, extra_ld=None):
         f'<meta http-equiv="Content-Security-Policy" content="{CSP}">',
         '<meta name="referrer" content="strict-origin-when-cross-origin">',
         '<meta name="theme-color" content="#0e5a55">',
+        f'<meta name="catalog" content="{CAT_PATH}">',
+        f'<link rel="preload" href="{CAT_PATH}" as="fetch" crossorigin="anonymous">',
     ]
     if noindex: head.append('<meta name="robots" content="noindex">')
     if GSC and path == '': head.append(f'<meta name="google-site-verification" content="{e(GSC)}">')
@@ -158,6 +173,7 @@ os.makedirs(OUT)
 for f in ['styles.css', 'app.js', 'favicon.svg', 'og.png']:
     if os.path.exists(os.path.join(ROOT, f)): shutil.copy(os.path.join(ROOT, f), OUT)
 shutil.copytree(os.path.join(ROOT, 'data'), os.path.join(OUT, 'data'), ignore=shutil.ignore_patterns('report.json'))
+open(os.path.join(OUT, CAT_PATH), 'w', encoding='utf-8').write(CAT_JSON)
 
 total = sum(s['n'] for s in S)
 home_desc = f'{SHEIKH}: شروح المتون والمحاضرات والخطب المنشورة في موقع معرفة السنن والآثار، مرتبة حسب الكتب والأبواب. {cnt(total, "item")}.'
@@ -259,7 +275,9 @@ open(os.path.join(OUT, '_headers'), 'w').write(f"""/*
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   X-Frame-Options: DENY
-/data/*
+/data/catalog.json
   Cache-Control: public, max-age=0, must-revalidate
+/data/c.*
+  Cache-Control: public, max-age=31536000, immutable
 """)
 print(f'built {len(sitemap)} indexable pages into {OUT} (base {BASE}, canonical {SITE or "none"})')

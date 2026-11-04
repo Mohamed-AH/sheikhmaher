@@ -100,7 +100,9 @@ const norm = s => String(s || '').replace(/[ً-ٰٟـ]/g, '').replace(/[إأآٱ
   .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
 // ---------- data ----------
-let C, S, T = [], textByKey = {}, textOf = {}, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = [];
+let C, S, T = [], textByKey = {}, textOf = {}, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = null;
+const FILES = 'https://maheralqahtani.org/lfm/files/admin/';  // the catalog shortens this common start of audio links to "~"
+const fileUrl = u => u && u[0] === '~' ? FILES + u.slice(1) : u;
 function prep(data) {
   C = data.cats; S = data.sections;
   S.forEach(s => {
@@ -113,9 +115,8 @@ function prep(data) {
     c.id = Number(id);
     const ds = c.l.map(l => l[3]).filter(Boolean).sort();
     c.d0 = ds[0]; c.d1 = ds[ds.length - 1];
-    c.l.forEach(l => { l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, cat: c.id }); });
+    c.l.forEach(l => { l[2] = fileUrl(l[2]); l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, cat: c.id }); });
     c.a.forEach(a => lessonIndex.set(a[0], { a, cat: c.id }));
-    searchIndex.push({ type: 'cat', id: c.id, n: norm(c.t) });
   }
   // year range aggregated over descendants
   const agg = (id, seen = new Set()) => {
@@ -126,17 +127,24 @@ function prep(data) {
   };
   for (const id in C) agg(Number(id));
   S.forEach(s => {
-    s.l.forEach(l => { l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, sec: s.key }); });
+    s.l.forEach(l => { l[2] = fileUrl(l[2]); l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, sec: s.key }); });
     s.a.forEach(a => lessonIndex.set(a[0], { a, sec: s.key }));
   });
-  lessonIndex.forEach((v, id) => searchIndex.push({ type: 'item', id, n: norm((v.l || v.a)[1]) }));
   // texts explained more than once: all their explanations under one heading
   T = (data.texts || []).map(t => ({ ...t, ids: t.ids.filter(i => C[i]) })).filter(t => t.ids.length > 1);
   T.forEach(t => {
     textByKey[t.k] = t; t.ids.forEach(i => { textOf[i] = t; });
     const ds = t.ids.flatMap(i => [C[i].r0, C[i].r1]).filter(Boolean).sort(); t.r0 = ds[0]; t.r1 = ds[ds.length - 1];
-    searchIndex.push({ type: 'text', k: t.k, n: norm(t.t + ' ' + t.by) });
   });
+}
+// built on the first search, so pages that never search don't pay for it
+function getSearchIndex() {
+  if (searchIndex) return searchIndex;
+  searchIndex = [];
+  for (const id in C) searchIndex.push({ type: 'cat', id: C[id].id, n: norm(C[id].t) });
+  lessonIndex.forEach((v, id) => searchIndex.push({ type: 'item', id, n: norm((v.l || v.a)[1]) }));
+  T.forEach(t => searchIndex.push({ type: 'text', k: t.k, n: norm(t.t + ' ' + t.by) }));
+  return searchIndex;
 }
 const total = () => S.reduce((n, s) => n + s.n, 0);
 const allSeries = () => Object.values(C).filter(c => c.up == null && catSection[c.id] && secByKey[catSection[c.id]].kind !== 'videos');
@@ -206,7 +214,7 @@ function shelfItems(list, key) {
 function lessonRow(l, catId, queueKey, m) {
   const [id, t, raw, d] = l;
   const part = m && m.of > 1 && !m.all ? ` <span class="part num">(${N(m.k)} من ${N(m.of)})</span>` : '';
-  const pos = m ? `<span class="num">الدرس ${N(m.pos)}</span>` : '';
+  const pos = (m ? `<span class="num">الدرس ${N(m.pos)}</span>` : '') + (m && m.flat && m.g ? `<span>${esc(chapterName(m.g))}</span>` : '');
   const url = hasFile(raw) ? safeUrl(raw) : '';
   const pdf = isPdf(url);
   const h = heard.has(id);
@@ -366,6 +374,47 @@ function chaptersNav(root, current, asked = current) {
     <ul>${empty.map(k => `<li${k.id === asked ? ' aria-current="true"' : ''}>${esc(chapterName(k))}</li>`).join('')}</ul></details>` : '';
   return `<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2><a href="#c-${root.id}" ${root.id === current ? 'aria-current="true"' : ''}><span>الكل</span><span class="c num">${N(root.n)}</span></a>${liveKids(root).map(k => item(k, 0)).join('')}${folded}</nav>`;
 }
+// ---------- lesson tools on a series page: search within it, sort, only what I haven't heard ----------
+let list = null;
+const sortPref = () => { const v = store.get('sort', 'book'); return ['book', 'new', 'old'].includes(v) ? v : 'book'; };
+function lessonTools(rows) {
+  const s = sortPref();
+  return `<div class="list-tools" role="search" aria-label="أدوات قائمة الدروس">
+    <label class="field">${I.search}<input type="search" id="lessonQ" placeholder="ابحث في ${N(rows.length)} درساً، أو اكتب رقم الدرس" autocomplete="off" aria-label="ابحث في دروس هذه السلسلة"></label>
+    <select id="lessonSort" aria-label="ترتيب الدروس">
+      <option value="book"${s === 'book' ? ' selected' : ''}>ترتيب الكتاب</option>
+      <option value="new"${s === 'new' ? ' selected' : ''}>الأحدث نشراً أولاً</option>
+      <option value="old"${s === 'old' ? ' selected' : ''}>الأقدم نشراً أولاً</option>
+    </select>
+    <label class="toggle"><input type="checkbox" id="lessonUnheard"> لم أستمع إليها</label>
+    <span class="count num" id="lessonCount" aria-live="polite"></span>
+  </div>`;
+}
+function lessonList(fresh) {
+  if (!list) return '';
+  const q = fresh ? '' : norm($('#lessonQ')?.value || ''), only = !fresh && $('#lessonUnheard')?.checked, sort = fresh || !$('#lessonSort') ? sortPref() : $('#lessonSort').value;
+  const terms = q ? q.split(' ') : [], num = /^\d+$/.test(q) ? Number(q) : 0;
+  let rows = list.rows.filter(m => (!only || !heard.has(m.l[0])) && (!terms.length || m.pos === num || terms.every(t => (m.n ??= norm(m.l[1] + ' ' + (m.g ? m.g.t : ''))).includes(t))));
+  if (sort !== 'book') {
+    const key = m => (m.l[3] || '') + String(m.l[0]).padStart(8, '0');
+    rows = rows.slice().sort((a, b) => sort === 'new' ? (key(a) < key(b) ? 1 : -1) : (key(a) < key(b) ? -1 : 1));
+  }
+  const flat = sort !== 'book' || terms.length > 0 || only;
+  const box = $('#lessonCount');
+  if (box && !fresh) box.textContent = terms.length || only ? `${N(rows.length)} من ${N(list.rows.length)}` : '';
+  if (!rows.length) return `<div class="empty-note">لا توجد دروس تطابق البحث.</div>`;
+  let lastG;
+  return paged(rows, m => {
+    m.flat = flat;
+    const head = !flat && m.g !== lastG ? (m.g ? `<div class="group-title"><a href="#c-${m.g.id}">${esc(m.g.t)}</a></div>` : '') : '';
+    lastG = m.g;
+    return head + lessonRow(m.l, m.g ? m.g.id : list.id, 'c-' + list.id, m);
+  }, 60);
+}
+function refreshList() {
+  const box = $('#lessonList'); if (!box || !list) return;
+  box.innerHTML = lessonList(); fixLinks(box); markPlaying();
+}
 function collectLessons(c, seen = new Set()) {
   if (!c || seen.has(c.id)) return []; seen.add(c.id);
   return [...c.l, ...c.kids.flatMap(k => collectLessons(C[k], seen))];
@@ -374,7 +423,7 @@ function viewCat(id, asking) {
   if (!C[id]) return notFound();
   const asked = C[id], top = crumbsFor(id)[0];
   if (!asked.n && asked.up != null && top.n) return viewCat(top.id, id).replace('<!--note-->', `<p class="notice">لم تُرفع دروس «${esc(chapterName(asked))}» بعد، فهذه أبواب الكتاب التي فيها دروس. <a href="${origCat(asked)}" target="_blank" rel="noopener">تحقق في الموقع الأصلي ↗</a></p>`);
-  const c = asked;
+  const c = asked; list = null;
   recent = [id, ...recent.filter(x => x !== id)].slice(0, 6); store.set('recent', recent);
   const chain = crumbsFor(id), root = chain[0];
   const sec = secByKey[catSection[root.id]];
@@ -389,7 +438,10 @@ function viewCat(id, asking) {
   const addKids = (cc, seen = new Set([cc.id])) => cc.kids.forEach(k => { const kc = C[k]; if (!kc || seen.has(k)) return; seen.add(k); if (kc.l.length) groups.push([kc, kc.l]); addKids(kc, seen); });
   addKids(c);
   if (groups.length) {
-    body += `<div class="lessons">${numberLessons(groups).map(([g, ls]) => (g ? `<div class="group-title"><a href="#c-${g.id}">${esc(g.t)}</a></div>` : '') + paged(ls, m => lessonRow(m.l, g ? g.id : c.id, 'c-' + c.id, m), 120)).join('')}</div>`;
+    const rows = [];
+    numberLessons(groups).forEach(([g, ls]) => ls.forEach(m => { m.g = g; rows.push(m); }));
+    list = { id: c.id, rows };
+    body += (rows.length >= 15 ? lessonTools(rows) : '') + `<div class="lessons" id="lessonList">${lessonList(true)}</div>`;
   }
   if (c.a.length) body += `<div class="lessons">${paged(c.a, articleRow, 40)}</div>`;
   if (!body) body = `<div class="lessons"><div class="empty-note">لا توجد دروس في هذا الباب حالياً.<br><a href="${origCat(c)}" target="_blank" rel="noopener" style="color:var(--brand)">تحقق في الموقع الأصلي ↗</a></div></div>`;
@@ -422,7 +474,7 @@ function results(q) {
   const nq = norm(q);
   if (nq.length < 2) return '<div class="empty-note">اكتب كلمتين على الأقل، مثل: الأصول الثلاثة، الصيام، الربا.</div>';
   const terms = nq.split(' ');
-  const hits = searchIndex.filter(x => terms.every(t => x.n.includes(t)));
+  const hits = getSearchIndex().filter(x => terms.every(t => x.n.includes(t)));
   const texts = hits.filter(h => h.type === 'text').map(h => textByKey[h.k]).filter(Boolean);
   const cats = hits.filter(h => h.type === 'cat').map(h => C[h.id]).filter(c => c && (c.n || c.up == null)).sort((a, b) => (a.n ? 0 : 1) - (b.n ? 0 : 1) || (a.up == null ? 0 : 1) - (b.up == null ? 0 : 1) || b.n - a.n);
   const items = hits.filter(h => h.type === 'item').map(h => [h.id, lessonIndex.get(h.id)]);
@@ -578,6 +630,9 @@ document.addEventListener('submit', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'q2') { lastQuery = e.target.value; clearTimeout(window.__st); window.__st = setTimeout(() => { pagers = {}; $('#results').innerHTML = results(lastQuery); fixLinks($('#results')); markPlaying(); if (PATH_MODE) history.replaceState(null, '', L('search') + (lastQuery ? '?q=' + encodeURIComponent(lastQuery) : '')); }, 200); }
+  if (e.target.id === 'lessonQ') { clearTimeout(window.__lt); window.__lt = setTimeout(refreshList, 150); }
+  if (e.target.id === 'lessonSort') { store.set('sort', e.target.value); refreshList(); }
+  if (e.target.id === 'lessonUnheard') refreshList();
   if (e.target.id === 'libFilter') { $('#libBody').innerHTML = libraryBody(e.target.value); fixLinks($('#libBody')); }
 });
 document.addEventListener('keydown', e => {
@@ -649,7 +704,7 @@ function boot(data) {
   if (last && lessonIndex.get(last.id)?.l) { const v = lessonIndex.get(last.id); queue = v.cat ? queueFor('c-' + v.cat) : [v.l]; qi = Math.max(0, queue.findIndex(l => l[0] === last.id)); load(false); }
 }
 if (window.CATALOG) boot(window.CATALOG);
-else fetch('data/catalog.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(boot).catch(() => {
+else fetch(document.querySelector('meta[name="catalog"]')?.content || 'data/catalog.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(boot).catch(() => {
   // keep any pre-rendered page content; only say so when there is nothing to show
   const note = '<div class="empty-note" role="alert">تعذّر تحميل الفهرس. تحقق من الاتصال ثم حدّث الصفحة.</div>';
   if (app.dataset.prerendered) app.insertAdjacentHTML('afterbegin', note); else app.innerHTML = note;
