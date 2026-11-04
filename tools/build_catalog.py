@@ -108,9 +108,9 @@ def vtitle(i):
     t = re.sub(r'[\u200e\u200f\u202a-\u202e]|\s*YouTube\s*$|\.(wmv|mp4|avi|flv)\b', '', t)
     t = re.sub(r'\s+', ' ', NAME_TAIL.sub('', t)).strip(' .-–|/')
     return t
-def video(i):
-    t = vtitle(i)
-    return [i, t] if t else i
+def video(i):  # [id, title, Hijri upload date] as far as known
+    t, h = vtitle(i), (VTITLES.get(i) or {}).get('h', '')
+    return [i, t, h] if h else [i, t] if t else i
 
 out_cats, report = {}, {'counts': [], 'recovered': [], 'attached': [], 'nested': []}
 for cid, c in cats.items():

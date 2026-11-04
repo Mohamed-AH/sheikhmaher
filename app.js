@@ -394,8 +394,8 @@ function videoTools() {
   return `<div class="list-tools" role="search" aria-label="أدوات قائمة المقاطع">
     <label class="field">${I.search}<input type="search" id="videoQ" placeholder="ابحث في عناوين ${N(vlist.rows.length)} مقطعاً" autocomplete="off" aria-label="ابحث في مقاطع هذه السلسلة"></label>
     <select id="videoSort" aria-label="ترتيب المقاطع">
-      <option value="site">${vlist.dated ? 'الأقدم أولاً' : 'ترتيب الموقع الأصلي'}</option>
-      <option value="rev">${vlist.dated ? 'الأحدث أولاً' : 'عكس الترتيب'}</option>
+      <option value="site">ترتيب السلسلة</option>
+      ${vlist.dated ? '<option value="new">الأحدث نشراً أولاً</option><option value="old">الأقدم نشراً أولاً</option>' : '<option value="rev">عكس الترتيب</option>'}
     </select>
     <span class="count num" id="videoCount" aria-live="polite"></span>
   </div>`;
@@ -404,7 +404,12 @@ function videoList(fresh) {
   if (!vlist) return '';
   const q = fresh ? '' : norm($('#videoQ')?.value || ''), terms = q ? q.split(' ') : [];
   let rows = vlist.rows.filter(m => !terms.length || terms.every(t => (m.n ??= norm(Array.isArray(m[0]) ? m[0][1] || '' : '')).includes(t)));
-  if (!fresh && $('#videoSort')?.value === 'rev') rows = rows.slice().reverse();
+  const sort = fresh ? 'site' : $('#videoSort')?.value || 'site';
+  if (sort === 'rev') rows = rows.slice().reverse();
+  if (sort === 'new' || sort === 'old') {  // undated videos go last either way
+    const d = m => (Array.isArray(m[0]) && m[0][2]) || '';
+    rows = rows.slice().sort((a, b) => !d(a) - !d(b) || (sort === 'new' ? d(b).localeCompare(d(a)) : d(a).localeCompare(d(b))));
+  }
   const box = !fresh && $('#videoCount'); if (box) box.textContent = terms.length ? `${N(rows.length)} من ${N(vlist.rows.length)}` : '';
   return rows.length ? paged(rows, videoCard, 48) : `<div class="empty-note" style="grid-column:1/-1">لا توجد مقاطع تطابق البحث.</div>`;
 }
