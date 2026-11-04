@@ -430,8 +430,7 @@ function lessonTools(rows, plain) {
     <span class="count num" id="lessonCount" aria-live="polite"></span>
   </div>`;
 }
-function lessonList(fresh) {
-  if (!list) return '';
+function listRows(fresh) {
   const q = fresh ? '' : norm($('#lessonQ')?.value || ''), only = !fresh && $('#lessonUnheard')?.checked, sort = fresh || !$('#lessonSort') ? sortPref() : $('#lessonSort').value;
   const terms = q ? q.split(' ') : [], num = !list.plain && /^\d+$/.test(q) ? Number(q) : 0;
   let rows = list.rows.filter(m => (!only || !heard.has(m.l[0])) && (!terms.length || m.pos === num || terms.every(t => (m.n ??= norm(m.l[1] + ' ' + (m.g ? m.g.t : ''))).includes(t))));
@@ -439,7 +438,11 @@ function lessonList(fresh) {
     const key = m => (m.l[3] || '') + String(m.l[0]).padStart(8, '0');
     rows = rows.slice().sort((a, b) => sort === 'new' ? (key(a) < key(b) ? 1 : -1) : (key(a) < key(b) ? -1 : 1));
   }
-  const flat = sort !== 'book' || terms.length > 0 || only;
+  return { rows, terms, only, flat: sort !== 'book' || terms.length > 0 || only };
+}
+function lessonList(fresh) {
+  if (!list) return '';
+  const { rows, terms, only, flat } = listRows(fresh);
   const box = $('#lessonCount');
   if (box && !fresh) box.textContent = terms.length || only ? `${N(rows.length)} من ${N(list.rows.length)}` : '';
   if (!rows.length) return `<div class="empty-note">لا توجد دروس تطابق البحث.</div>`;
@@ -582,79 +585,159 @@ const SITE_NAME = 'مكتبة معرفة السنن والآثار للشيخ م
 
 // ---------- player ----------
 const audio = $('#audio'), player = $('#player');
-let queue = [], qi = -1, cur = null;
+let queue = [], qi = -1, cur = null, qkey = '';
 const speeds = [1, 1.25, 1.5, 1.75, 2]; let sp = store.get('speed', 0);
+const playable = l => !!(l && l[2] && !isPdf(l[2]));
+// the list a play button belongs to, in the order (and with the search) the visitor has on screen
 function queueFor(key) {
-  if (key.startsWith('c-')) return collectLessons(C[Number(key.slice(2))]).filter(l => l[2] && !isPdf(l[2]));
-  if (key.startsWith('s-')) return (secByKey[key.slice(2)]?.l || []).filter(l => l[2] && !isPdf(l[2]));
+  if (list && list.q === key && $('#lessonList')) return listRows().rows.map(m => m.l).filter(playable);
+  if (key.startsWith('c-')) return collectLessons(C[Number(key.slice(2))]).filter(playable);
+  if (key.startsWith('s-')) return (secByKey[key.slice(2)]?.l || []).filter(playable);
   return [];
 }
+function setQueue(key, ls, i) {
+  queue = ls; qi = i; qkey = key;
+  store.set('queue', { k: key, ids: ls.map(l => l[0]) });
+  if (!qPanel.hidden) renderQueue();
+}
 function playLesson(id, key) {
-  queue = queueFor(key); qi = queue.findIndex(l => l[0] === id);
-  if (qi < 0) { const v = lessonIndex.get(id); if (!v || !v.l || !v.l[2]) return; queue = [v.l]; qi = 0; }
+  const ls = queueFor(key), i = ls.findIndex(l => l[0] === id);
+  if (i >= 0) setQueue(key, ls, i);
+  else { const v = lessonIndex.get(id); if (!playable(v?.l)) return; setQueue('', [v.l], 0); }
   load(true);
+}
+// a lesson counts as heard once it reaches its last 5% or last 30 seconds
+const nearEnd = () => audio.duration > 60 && (audio.currentTime >= audio.duration * .95 || audio.duration - audio.currentTime <= 30);
+function savePos() {
+  if (!cur || audio.currentTime <= 5) return;
+  if (nearEnd()) { if (resume[cur[0]]) { delete resume[cur[0]]; store.set('resume', resume); } return; }
+  resume[cur[0]] = audio.currentTime; store.set('resume', resume);
+}
+function setHeard(id, on) {
+  if (on === heard.has(id)) return;
+  on ? heard.add(id) : heard.delete(id); store.set('heard', [...heard]);
+  document.querySelectorAll(`.lesson[data-id="${id}"]`).forEach(e => { e.classList.toggle('heard', on); const b = e.querySelector('[data-heard]'); if (b) b.setAttribute('aria-pressed', on); });
+  document.querySelectorAll(`#qList [data-qi]`).forEach(b => { if (queue[b.dataset.qi]?.[0] === id) b.classList.toggle('heard', on); });
 }
 function load(autoplay) {
   const l = queue[qi]; if (!l) return;
-  if (cur && audio.currentTime > 5) { resume[cur[0]] = audio.currentTime; store.set('resume', resume); }
+  savePos();
   cur = l; const v = lessonIndex.get(l[0]);
   player.hidden = false; document.body.classList.add('has-player'); $('#pErr').hidden = true;
   $('#pTitle').textContent = lessonTitle(l[1]);
   const where = v && v.cat ? C[v.cat] : null;
   $('#pSeries').textContent = where ? where.t : (v && v.sec ? secByKey[v.sec].t : '');
   $('#pSeries').href = L(where ? 'c-' + where.id : (v && v.sec ? 's-' + v.sec : ''));
-  $('#pDl').href = l[2];
-  audio.src = l[2]; audio.playbackRate = speeds[sp];
+  $('#pDl').href = l[2]; $('#qDl').href = l[2];
+  audio.src = l[2]; audio.playbackRate = speeds[sp]; audio.volume = 1;
   const startAt = resume[l[0]] || 0;
-  audio.addEventListener('loadedmetadata', () => { if (startAt && startAt < audio.duration - 5) audio.currentTime = startAt; }, { once: true });
+  audio.addEventListener('loadedmetadata', () => { if (startAt && startAt < audio.duration - 30) audio.currentTime = startAt; }, { once: true });
   if (autoplay) audio.play().catch(() => { });
   store.set('last', { id: l[0] });
+  setMeta($('#pSeries').textContent);
   markPlaying();
 }
+// lock screen, headphones and car: the lesson's name, its series and the site's mark
+function setMeta(series) {
+  if (!('mediaSession' in navigator) || !cur || typeof MediaMetadata === 'undefined') return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: lessonTitle(cur[1]), artist: 'الشيخ ماهر بن ظافر القحطاني', album: series || '',
+      artwork: [{ src: new URL('icon-512.png', document.baseURI).href, sizes: '512x512', type: 'image/png' }] });
+  } catch { }
+}
+const skip = s => { if (audio.duration) audio.currentTime = Math.max(0, Math.min(audio.duration - 1, audio.currentTime + s)); };
 function markPlaying() {
   document.querySelectorAll('.lesson.playing').forEach(e => e.classList.remove('playing'));
   document.querySelectorAll('[data-play]').forEach(b => b.innerHTML = I.play);
   if (!cur) return;
   document.querySelectorAll(`.lesson[data-id="${cur[0]}"]`).forEach(e => { e.classList.add('playing'); const b = e.querySelector('[data-play]'); if (b && !audio.paused) b.innerHTML = I.pause; });
   $('#pPlay').innerHTML = audio.paused ? I.play : I.pause;
+  $('#pPlay').setAttribute('aria-label', audio.paused ? 'تشغيل' : 'إيقاف مؤقت');
+  document.querySelectorAll('#qList [data-qi]').forEach(b => Number(b.dataset.qi) === qi ? b.setAttribute('aria-current', 'true') : b.removeAttribute('aria-current'));
+  $('#qPos').textContent = queue.length > 1 ? `الدرس ${N(qi + 1)} من ${N(queue.length)}` : '';
 }
 audio.addEventListener('play', markPlaying); audio.addEventListener('pause', markPlaying);
 audio.addEventListener('timeupdate', () => {
   if (!audio.duration) return;
   $('#pSeek').value = Math.round(audio.currentTime / audio.duration * 1000);
   $('#pCur').textContent = fmt(audio.currentTime); $('#pDur').textContent = fmt(audio.duration);
-  if (Math.floor(audio.currentTime) % 10 === 0 && cur) { resume[cur[0]] = audio.currentTime; store.set('resume', resume); }
+  if (cur && nearEnd()) setHeard(cur[0], true);
+  if (cur && (Math.floor(audio.currentTime) % 10 === 0 || nearEnd())) savePos();
+  sleepTick();
+  if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && Math.floor(audio.currentTime) % 5 === 0) {
+    try { navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(audio.currentTime, audio.duration), playbackRate: audio.playbackRate }); } catch { }
+  }
 });
 audio.addEventListener('ended', () => {
-  if (cur) { heard.add(cur[0]); delete resume[cur[0]]; store.set('heard', [...heard]); store.set('resume', resume); }
+  if (cur) { setHeard(cur[0], true); if (resume[cur[0]]) { delete resume[cur[0]]; store.set('resume', resume); } }
+  if (sleep && sleep.lesson) { setSleep(''); return; }
   if (qi < queue.length - 1) { qi++; load(true); }
 });
 audio.addEventListener('error', () => { if (!cur) return; const e = $('#pErr'); e.hidden = false; e.innerHTML = `تعذّر تشغيل الملف هنا. <a href="${esc(cur[2])}" target="_blank" rel="noopener">افتحه مباشرة ↗</a>`; });
 $('#pPlay').onclick = () => audio.paused ? audio.play().catch(() => { }) : audio.pause();
 $('#pNext').onclick = () => { if (qi < queue.length - 1) { qi++; load(true); } };
+document.querySelectorAll('[data-skip]').forEach(b => b.onclick = () => skip(Number(b.dataset.skip)));
 $('#pPrev').onclick = () => { if (audio.currentTime > 8) audio.currentTime = 0; else if (qi > 0) { qi--; load(true); } };
 $('#pSeek').oninput = e => { if (audio.duration) audio.currentTime = e.target.value / 1000 * audio.duration; };
-const spLabel = () => $('#pSpeed').textContent = N(speeds[sp]) + '×';
-$('#pSpeed').onclick = () => { sp = (sp + 1) % speeds.length; audio.playbackRate = speeds[sp]; store.set('speed', sp); spLabel(); };
+const spLabel = () => { $('#pSpeed').textContent = $('#qSpeed').textContent = N(speeds[sp]) + '×'; };
+$('#pSpeed').onclick = $('#qSpeed').onclick = () => { sp = (sp + 1) % speeds.length; audio.playbackRate = speeds[sp]; store.set('speed', sp); spLabel(); };
 spLabel();
 if ('mediaSession' in navigator) {
-  try {
-    navigator.mediaSession.setActionHandler('nexttrack', () => $('#pNext').click());
-    navigator.mediaSession.setActionHandler('previoustrack', () => $('#pPrev').click());
-  } catch { }
+  const on = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch { } };
+  on('nexttrack', () => $('#pNext').click());
+  on('previoustrack', () => $('#pPrev').click());
+  on('seekbackward', d => skip(-(d && d.seekOffset || 15)));
+  on('seekforward', d => skip(d && d.seekOffset || 15));
+  on('seekto', d => { if (d && d.seekTime != null) audio.currentTime = d.seekTime; });
+  on('play', () => audio.play().catch(() => { }));
+  on('pause', () => audio.pause());
 }
+
+// ---------- the playlist panel ----------
+const qPanel = $('#qPanel'), qBtn = $('#pQueue');
+function renderQueue() {
+  $('#qList').innerHTML = queue.map((l, i) => `<li><button type="button" data-qi="${i}" class="${heard.has(l[0]) ? 'heard' : ''}"${i === qi ? ' aria-current="true"' : ''}>
+    <span class="n num">${N(i + 1)}</span><span class="t">${esc(lessonTitle(l[1]))}</span>${I.check}</button></li>`).join('');
+  markPlaying();
+}
+function openQueue(open) {
+  qPanel.hidden = !open; qBtn.setAttribute('aria-expanded', open);
+  if (open) { renderQueue(); const c = $('#qList [aria-current]'); if (c) c.scrollIntoView({ block: 'center' }); $('#qClose').focus(); }
+  else $('#qList').innerHTML = '';
+}
+qBtn.onclick = () => openQueue(qPanel.hidden);
+$('#qClose').onclick = () => { openQueue(false); qBtn.focus(); };
+$('#qList').onclick = e => { const b = e.target.closest('[data-qi]'); if (!b) return; const i = Number(b.dataset.qi); if (i === qi) { audio.paused ? audio.play().catch(() => { }) : audio.pause(); } else { qi = i; load(true); } };
+qPanel.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); openQueue(false); qBtn.focus(); } });
+
+// ---------- sleep timer: after this lesson, or after some minutes (the last 8 seconds fade out) ----------
+let sleep = null, sleepIv = 0;
+function setSleep(v) {
+  sleep = !v ? null : v === 'lesson' ? { lesson: true } : { at: Date.now() + Number(v) * 60000 };
+  $('#qSleep').value = v; audio.volume = 1;
+  qBtn.querySelector('.dot').hidden = !sleep;
+  clearInterval(sleepIv); if (sleep && sleep.at) sleepIv = setInterval(sleepTick, 1000);
+  sleepTick();
+}
+function sleepTick() {
+  const left = $('#qSleepLeft');
+  if (!sleep) { left.textContent = ''; return; }
+  if (sleep.lesson) { left.textContent = 'يتوقف بعد انتهاء هذا الدرس'; return; }
+  const ms = sleep.at - Date.now();
+  if (ms <= 0) { audio.pause(); setSleep(''); left.textContent = 'توقف المؤقت'; return; }
+  if (ms < 8000 && !audio.paused) audio.volume = Math.max(0, ms / 8000);
+  left.textContent = 'يتوقف بعد ' + fmt(ms / 1000);
+}
+$('#qSleep').onchange = e => setSleep(e.target.value);
 
 // ---------- events ----------
 document.addEventListener('click', e => {
   if (e.target.closest('a.skip')) { e.preventDefault(); app.focus(); return; }
   const t = e.target.closest('button,[data-q]'); if (!t) return;
   if (t.dataset.play) { const id = Number(t.dataset.play); if (cur && cur[0] === id) { audio.paused ? audio.play().catch(() => { }) : audio.pause(); } else playLesson(id, t.dataset.q || ''); return; }
-  if (t.dataset.playall) { queue = queueFor(t.dataset.playall); qi = 0; load(true); return; }
-  if (t.dataset.continue) { queue = queueFor(t.dataset.continue); qi = Math.max(0, queue.findIndex(l => !heard.has(l[0]))); load(true); return; }
-  if (t.dataset.heard) {
-    const id = Number(t.dataset.heard); heard.has(id) ? heard.delete(id) : heard.add(id); store.set('heard', [...heard]);
-    t.setAttribute('aria-pressed', heard.has(id)); t.closest('.lesson').classList.toggle('heard', heard.has(id)); return;
-  }
+  if (t.dataset.playall) { const k = t.dataset.playall, ls = queueFor(k); if (!ls.length) return; setQueue(k, ls, 0); load(true); return; }
+  if (t.dataset.continue) { const k = t.dataset.continue, ls = queueFor(k); if (!ls.length) return; setQueue(k, ls, Math.max(0, ls.findIndex(l => !heard.has(l[0])))); load(true); return; }
+  if (t.dataset.heard) { const id = Number(t.dataset.heard); setHeard(id, !heard.has(id)); return; }
   if (t.dataset.save) { const id = Number(t.dataset.save); saved.has(id) ? saved.delete(id) : saved.add(id); store.set('saved', [...saved]); route(); return; }
   if (t.dataset.more) {
     const p = pagers[t.dataset.more], box = document.getElementById(t.dataset.more); if (!p) return;
@@ -692,11 +775,11 @@ $('#theme2').onclick = toggleTheme;
 
 // ---------- player close ----------
 $('#pClose').onclick = () => {
-  if (cur && audio.currentTime > 5) { resume[cur[0]] = audio.currentTime; store.set('resume', resume); }
+  savePos(); setSleep(''); openQueue(false);
   audio.pause(); audio.removeAttribute('src'); audio.load();
-  cur = null; queue = []; qi = -1;
+  cur = null; queue = []; qi = -1; qkey = '';
   player.hidden = true; document.body.classList.remove('has-player');
-  store.set('last', null); markPlaying();
+  store.set('last', null); store.set('queue', null); markPlaying();
 };
 
 // ---------- mobile menu ----------
@@ -746,7 +829,14 @@ function boot(data) {
   if (data.built) $('#built').textContent = 'آخر تحديث للفهرس: ' + new Date(data.built).toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: 'long', day: 'numeric' });
   route();
   const last = store.get('last', null);
-  if (last && lessonIndex.get(last.id)?.l) { const v = lessonIndex.get(last.id); queue = v.cat ? queueFor('c-' + v.cat) : [v.l]; qi = Math.max(0, queue.findIndex(l => l[0] === last.id)); load(false); }
+  if (last && playable(lessonIndex.get(last.id)?.l)) {
+    const v = lessonIndex.get(last.id), sq = store.get('queue', null);
+    let ls = sq && Array.isArray(sq.ids) ? sq.ids.map(id => lessonIndex.get(id)?.l).filter(playable) : [];
+    if (!ls.some(l => l[0] === last.id)) ls = queueFor(v.cat ? 'c-' + v.cat : 's-' + v.sec);  // older visits saved no queue
+    const i = ls.findIndex(l => l[0] === last.id);
+    if (i >= 0) setQueue(sq && sq.k || '', ls, i); else setQueue('', [v.l], 0);
+    load(false);
+  }
 }
 if (window.CATALOG) boot(window.CATALOG);
 else fetch(document.querySelector('meta[name="catalog"]')?.content || 'data/catalog.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(boot).catch(() => {
