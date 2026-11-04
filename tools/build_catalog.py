@@ -245,6 +245,21 @@ def course_groups(loose, label):
             top = max(set(named), key=named.count)
             for f in fs:
                 if not f['_book']: f['_book'] = top
+    # a folder that is almost all one book keeps its few differently named lessons with it,
+    # e.g. «[ مجموع الفتاوى ]» lessons inside "فتاوى ابن تيمية/الجزء السابع"
+    homes = collections.defaultdict(set)  # book -> folders it is named in
+    for f in loose:
+        if f['_book']: homes[bnorm(f['_book'])].add(f['_key'])
+    for k, fs in by_key.items():
+        named = collections.Counter(f['_book'] for f in fs if f['_book'])
+        if len(named) < 2: continue
+        top, n = named.most_common(1)[0]
+        if n < 0.8 * sum(named.values()) or n < 10: continue
+        for f in fs:
+            if (f['_book'] and f['_book'] != top and not same_book(f['_book'], top) and bnorm(f['_book']) not in bnorm(k)
+                    and homes[bnorm(f['_book'])] == {k}):  # a book with courses of its own elsewhere is not renamed
+                report.setdefault('folder_book', []).append({'lesson': f['id'], 'was': f['_book'], 'now': top, 'folder': k})
+                f['_book'] = top
     # books: cluster spellings of the same book name
     books = []  # [[names...]]
     for f in loose:

@@ -255,6 +255,6 @@ open(os.path.join(OUT, '_headers'), 'w').write(f"""/*
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   X-Frame-Options: DENY
 /data/*
-  Cache-Control: public, max-age=3600
+  Cache-Control: public, max-age=0, must-revalidate
 """)
 print(f'built {len(sitemap)} indexable pages into {OUT} (base {BASE}, canonical {SITE or "none"})')
