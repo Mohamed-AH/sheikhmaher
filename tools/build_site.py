@@ -21,6 +21,13 @@ args = ap.parse_args()
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = '/' + args.base.strip('/') + '/' if args.base.strip('/') else '/'
 SITE = (args.site_url.rstrip('/') + '/') if args.site_url else ''
+# On Cloudflare Pages without SITE_URL, use the address Cloudflare gives the build, so link previews
+# (WhatsApp, Telegram, X) still get the absolute image and page addresses they need: production builds use
+# the project's own address (https://<hash>.sheikhmaher.pages.dev → https://sheikhmaher.pages.dev/)
+if not SITE and os.environ.get('CF_PAGES_URL'):
+    cf = os.environ['CF_PAGES_URL'].rstrip('/')
+    if os.environ.get('CF_PAGES_BRANCH') == 'main': cf = re.sub(r'^https://[^./]+\.(?=[^.]+\.pages\.dev$)', 'https://', cf)
+    SITE = cf + BASE
 OUT = os.path.abspath(args.out)
 ORIGIN = 'https://maheralqahtani.org'
 SITE_NAME = 'مكتبة معرفة السنن والآثار للشيخ ماهر القحطاني حفظه الله'
@@ -116,7 +123,11 @@ def page(path, title, desc, body, crumbs=None, noindex=False, extra_ld=None):
         f'<meta property="og:site_name" content="{e(SITE_NAME)}">', f'<meta property="og:title" content="{e(title or SITE_NAME)}">',
         f'<meta property="og:description" content="{e(desc)}">', '<meta name="twitter:card" content="summary_large_image">',
     ]
-    if url: head += [f'<meta property="og:url" content="{e(url)}">', f'<meta property="og:image" content="{e(SITE)}og.png">']
+    if url: head += [f'<meta property="og:url" content="{e(url)}">', f'<meta property="og:image" content="{e(SITE)}og.png">',
+                     '<meta property="og:image:type" content="image/png">', '<meta property="og:image:width" content="1200">',
+                     '<meta property="og:image:height" content="630">', f'<meta property="og:image:alt" content="{e(SITE_NAME)}">',
+                     f'<meta name="twitter:image" content="{e(SITE)}og.png">', f'<meta name="twitter:title" content="{e(title or SITE_NAME)}">',
+                     f'<meta name="twitter:description" content="{e(desc)}">']
     for x in ld: head.append('<script type="application/ld+json">' + json.dumps(x, ensure_ascii=False).replace('</', '<\\/') + '</script>')
     if BEACON: head.append(f'<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon=\'{{"token": "{e(BEACON)}"}}\'></script>')
     base_tag, rest = head[0], head[1:]
