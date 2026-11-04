@@ -29,6 +29,19 @@ BEACON = os.environ.get('CF_BEACON_TOKEN', '').strip()
 GSC = os.environ.get('GSC_VERIFICATION', '').strip()  # Google Search Console HTML-tag token
 
 cat = json.load(open(os.path.join(ROOT, 'data', 'catalog.json')))
+# the browser gets a compact copy under a name that changes with its content, so it can keep it for good:
+# audio links lose their common start (the app puts it back) and the JSON has no spaces
+FILES = 'https://maheralqahtani.org/lfm/files/admin/'
+def _compact(o):
+    import copy
+    o = copy.deepcopy(o)
+    for c in list(o['cats'].values()) + o['sections']:
+        for l in c.get('l', []):
+            if isinstance(l[2], str) and l[2].startswith(FILES): l[2] = '~' + l[2][len(FILES):]
+    return json.dumps(o, ensure_ascii=False, separators=(',', ':'))
+CAT_JSON = _compact(cat)
+import hashlib
+CAT_PATH = 'data/c.' + hashlib.sha256(CAT_JSON.encode()).hexdigest()[:10] + '.json'
 C = {int(k): v for k, v in cat['cats'].items()}
 S = cat['sections']
 SEC = {s['key']: s for s in S}
@@ -44,6 +57,7 @@ e = lambda t: html.escape(str(t), quote=True)
 AR = str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩')
 def N(n): return f'{n:,}'.translate(AR).replace(',', '٬')
 WORDS = {
+    'sharh': ('شرح', 'شرحان', 'شروح', 'شرحاً', 'شرح', 'واحد'),
     'lesson': ('درس', 'درسان', 'دروس', 'درساً', 'درس', 'واحد'),
     'clip': ('مقطع', 'مقطعان', 'مقاطع', 'مقطعاً', 'مقطع', 'واحد'),
     'item': ('مادة', 'مادتان', 'مواد', 'مادةً', 'مادة', 'واحدة'),
@@ -91,6 +105,8 @@ def page(path, title, desc, body, crumbs=None, noindex=False, extra_ld=None):
         f'<meta http-equiv="Content-Security-Policy" content="{CSP}">',
         '<meta name="referrer" content="strict-origin-when-cross-origin">',
         '<meta name="theme-color" content="#0e5a55">',
+        f'<meta name="catalog" content="{CAT_PATH}">',
+        f'<link rel="preload" href="{CAT_PATH}" as="fetch" crossorigin="anonymous">',
     ]
     if noindex: head.append('<meta name="robots" content="noindex">')
     if GSC and path == '': head.append(f'<meta name="google-site-verification" content="{e(GSC)}">')
@@ -124,13 +140,29 @@ def book_card(i):
             f'<div><h3>{e(c["t"])}</h3><div class="meta"><span>{cnt(c["n"], "clip" if c["v"] and not c["l"] else "lesson")}</span>'
             + (f'<span>{cnt(len(c["kids"]), "chapter")}</span>' if c['kids'] else '') + '</div></div></a>')
 
+TEXTS = [t for t in cat.get('texts', []) if len([i for i in t['ids'] if i in C]) > 1]
+TEXT_OF = {i: t for t in TEXTS for i in t['ids']}
+def text_card(t):
+    return (f'<a class="book text" href="text/{t["k"]}/"><div class="spine stack"><span class="num">{N(len(t["ids"]))}</span></div>'
+            f'<div><h3>{e(t["t"])}</h3><div class="by">{e(t["by"])}</div><div class="meta"><span>{cnt(len(t["ids"]), "sharh")}</span><span>{cnt(t["n"], "lesson")}</span></div></div></a>')
+def shelf(ids, key=None):
+    out, seen = [], set()
+    for i in ids:
+        if not C[i]['n']: continue
+        t = TEXT_OF.get(i)
+        if not t: out.append(((1e9 if C[i].get('top') else 0) + C[i]['n'], book_card(i)))
+        elif t['k'] not in seen: seen.add(t['k']); out.append((t['n'], text_card(t)))
+    for t in TEXTS:  # books that belong to two subjects, e.g. بلوغ المرام in الحديث and الفقه
+        if key in t.get('also', []) and t['k'] not in seen: seen.add(t['k']); out.append((t['n'], text_card(t)))
+    return ''.join(h for _, h in sorted(out, key=lambda x: -x[0]))
+
 def lessons_html(ls):
     rows, ts = [], [lesson_title(l[1]) for l in ls]
     for i, l in enumerate(ls):
         a = b = i
         while a > 0 and ts[a - 1] == ts[i]: a -= 1
         while b < len(ts) - 1 and ts[b + 1] == ts[i]: b += 1
-        part = f' <span class="part">({N(i - a + 1)} من {N(b - a + 1)})</span>' if b > a else ''
+        part = f' <span class="part">({N(i - a + 1)} من {N(b - a + 1)})</span>' if b > a and b - a + 1 < len(ls) else ''
         rows.append(f'<div class="lesson"><span class="play" aria-hidden="true"></span><div><div class="t">{e(ts[i])}{part}</div>'
                     f'<div class="sub"><span>الدرس {N(i + 1)}</span></div></div>'
                     f'<div class="acts"><a href="{ORIGIN}/details/{int(l[0])}" target="_blank" rel="noopener">صفحة الدرس</a></div></div>')
@@ -141,6 +173,7 @@ os.makedirs(OUT)
 for f in ['styles.css', 'app.js', 'favicon.svg', 'og.png']:
     if os.path.exists(os.path.join(ROOT, f)): shutil.copy(os.path.join(ROOT, f), OUT)
 shutil.copytree(os.path.join(ROOT, 'data'), os.path.join(OUT, 'data'), ignore=shutil.ignore_patterns('report.json'))
+open(os.path.join(OUT, CAT_PATH), 'w', encoding='utf-8').write(CAT_JSON)
 
 total = sum(s['n'] for s in S)
 home_desc = f'{SHEIKH}: شروح المتون والمحاضرات والخطب المنشورة في موقع معرفة السنن والآثار، مرتبة حسب الكتب والأبواب. {cnt(total, "item")}.'
@@ -160,7 +193,7 @@ page('', '', home_desc, home, extra_ld=site_ld)
 # simple app pages (rendered by the app; noindex for personal / dynamic ones)
 page('library/', 'المكتبة', f'كل الكتب والسلاسل المشروحة ل{SHEIKH}، مرتبة حسب الأقسام.',
      '<div class="page-head"><div class="wrap"><h1 class="kufi">المكتبة كاملة</h1></div></div><div class="wrap">'
-     + ''.join(f'<section class="block"><h2>{e(s["t"])}</h2><div class="series-list">' + ''.join(book_card(i) for i in sorted(s['series'], key=lambda i: -C[i]['n']) if C[i]['n']) + '</div></section>' for s in S if s['series'])
+     + ''.join(f'<section class="block"><h2>{e(s["t"])}</h2><div class="series-list">' + shelf(s['series'], s['key']) + '</div></section>' for s in S if s['series'])
      + '</div>', crumbs=[('الرئيسية', ''), ('المكتبة', 'library/')])
 sitemap.append(('library/', .8))
 page('start/', 'ابدأ من هنا', f'طريق مقترح لطالب العلم الجديد في دروس {SHEIKH}: متون مختصرة مرتبة من الأيسر إلى الأوسع.',
@@ -176,7 +209,7 @@ for s in S:
     cr = [('الرئيسية', ''), ('المكتبة', 'library/'), (s['t'], path)]
     body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1 class="kufi">{e(s["t"])}</h1>'
             f'<div class="meta"><span class="pill num">{cnt(s["n"], "item")}</span></div></div></div><div class="wrap" style="padding-block:24px">'
-            + (f'<div class="series-list">' + ''.join(book_card(i) for i in sorted(s['series'], key=lambda i: -C[i]['n']) if C[i]['n']) + '</div>' if s['series'] else '')
+            + (f'<div class="series-list">' + shelf(s['series'], s['key']) + '</div>' if s['series'] else '')
             + (lessons_html(s['l'][:300]) if s['l'] else '')
             + (''.join(f'<a class="article" href="{ORIGIN}/details/{int(a[0])}" target="_blank" rel="noopener"><h3>{e(a[1])}</h3><p>{e(a[2])}</p></a>' for a in s['a']) if s['a'] else '')
             + '</div>')
@@ -184,25 +217,44 @@ for s in S:
     page(path, s['t'], desc, body, crumbs=cr)
     sitemap.append((path, .7))
 
+# texts explained more than once
+for t in TEXTS:
+    path = f'text/{t["k"]}/'
+    sk = cat_section.get(t['ids'][0])
+    cr = [('الرئيسية', '')] + ([(SEC[sk]['t'], f'section/{sk}/')] if sk else []) + [(t['t'], path)]
+    items = ''.join(f'<a class="exp" href="book/{i}/"><span class="no num" aria-hidden="true">{N(n + 1)}</span><div><h3>{e(t.get("h", {}).get(str(i)) or C[i]["t"])}</h3>'
+                    + (f'<div class="full">{e(C[i]["t"])}</div>' if not t.get('h', {}).get(str(i), C[i]['t']).startswith(C[i]['t']) else '') + f'<div class="chips num"><span>{cnt(C[i]["n"], "lesson")}</span></div></div></a>'
+                    for n, i in enumerate(t['ids']) if i in C)
+    body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1>{e(t["t"])}</h1><p class="byline">{e(t["by"])}</p>'
+            f'<div class="meta"><span class="pill num">{cnt(len(t["ids"]), "sharh")}</span><span class="pill num">{cnt(t["n"], "lesson")}</span></div></div></div>'
+            f'<div class="wrap" style="padding-block:24px"><h2 class="sr-only">الشروح</h2><div class="exps">{items}</div></div>')
+    desc = f'شروح «{t["t"]}» {t["by"]}، ل{SHEIKH}: {cnt(len(t["ids"]), "sharh")} في أماكن وأعوام مختلفة، {cnt(t["n"], "lesson")}.'
+    page(path, t['t'], desc, body, crumbs=cr, extra_ld={'@context': 'https://schema.org', '@type': 'CollectionPage', 'name': t['t'], 'inLanguage': 'ar', 'description': desc})
+    sitemap.append((path, .7))
+
 # books and chapters
 for i, c in C.items():
     path = f'book/{i}/'
     ch = chain(i)
     sk = cat_section.get(ch[0][0])
-    cr = [('الرئيسية', '')] + ([(SEC[sk]['t'], f'section/{sk}/')] if sk else []) + [(x['t'], f'book/{j}/') for j, x in ch]
-    kids = [k for k in c['kids'] if k in C]
+    tx = TEXT_OF.get(ch[0][0])
+    cr = [('الرئيسية', '')] + ([(SEC[sk]['t'], f'section/{sk}/')] if sk else []) + ([(tx['t'], f'text/{tx["k"]}/')] if tx else []) + [(x['t'], f'book/{j}/') for j, x in ch]
+    kids = [k for k in c['kids'] if k in C and C[k]['n']]  # chapters with no lessons yet are folded below
+    empty = [k for k in c['kids'] if k in C and not C[k]['n']]
     unit = 'clip' if c['v'] and not c['l'] else 'lesson'
     body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1>{e(c["t"])}</h1>'
             f'<div class="meta"><span class="pill num">{cnt(c["n"], unit)}</span>' + (f'<span class="pill num">{cnt(len(kids), "chapter")}</span>' if kids else '') + '</div></div></div>'
             '<div class="wrap" style="padding-block:24px">'
-            + ('<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2>' + ''.join(f'<a href="book/{k}/"><span>{e(C[k]["t"])}</span><span class="c num">{N(C[k]["n"])}</span></a>' for k in kids) + '</nav>' if kids else '')
+            + ('<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2>' + ''.join(f'<a href="book/{k}/"><span>{e(C[k]["t"])}</span><span class="c num">{N(C[k]["n"])}</span></a>' for k in kids)
+               + (f'<details class="empties"><summary>أبواب لم تُرفع دروسها بعد <span class="num">({N(len(empty))})</span></summary><ul>' + ''.join(f'<li>{e(C[k]["t"])}</li>' for k in empty) + '</ul></details>' if empty else '')
+               + '</nav>' if kids or empty else '')
             + ('<h2 class="sr-only">الدروس</h2>' + lessons_html(c['l']) if c['l'] else '')
             + (''.join(f'<a class="article" href="{ORIGIN}/details/{int(a[0])}" target="_blank" rel="noopener"><h3>{e(a[1])}</h3></a>' for a in c['a']) if c['a'] else '')
             + '</div>')
     parent = f' من «{ch[0][1]["t"]}»' if len(ch) > 1 else ''
     desc = f'«{c["t"]}»{parent}: {cnt(c["n"], unit)} ل{SHEIKH}، للاستماع والتنزيل' + (f'، في {cnt(len(kids), "chapter")}' if kids else '') + '.'
     ld = {'@context': 'https://schema.org', '@type': 'CollectionPage', 'name': c['t'], 'inLanguage': 'ar', 'description': desc,
-          'author': {'@type': 'Person', 'name': 'ماهر بن ظافر القحطاني'}, 'isBasedOn': f'{ORIGIN}/page/{c["p"]}' + ('' if c.get('x') else f'?category_id={i}')}
+          'author': {'@type': 'Person', 'name': 'ماهر بن ظافر القحطاني'}, 'isBasedOn': c.get('src') or (f'{ORIGIN}/page/{c["p"]}' + ('' if c.get('x') else f'?category_id={i}'))}
     page(path, c['t'], desc, body, crumbs=[(n, p) for n, p in cr], noindex=c['n'] == 0, extra_ld=ld)
     if c['n']: sitemap.append((path, .6 if c['up'] is None else .5))
 
@@ -223,7 +275,9 @@ open(os.path.join(OUT, '_headers'), 'w').write(f"""/*
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   X-Frame-Options: DENY
-/data/*
-  Cache-Control: public, max-age=3600
+/data/catalog.json
+  Cache-Control: public, max-age=0, must-revalidate
+/data/c.*
+  Cache-Control: public, max-age=31536000, immutable
 """)
 print(f'built {len(sitemap)} indexable pages into {OUT} (base {BASE}, canonical {SITE or "none"})')

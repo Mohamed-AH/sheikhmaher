@@ -153,13 +153,20 @@ section.block { padding-block: 40px 8px; }
 .layout > * { min-width: 0; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
 .chapters { position: sticky; top: 76px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px; max-height: calc(100vh - 190px); overflow: auto; }
-@media (max-width: 900px) { .chapters { position: static; max-height: none; } }
+@media (max-width: 900px) { .chapters { position: static; max-height: 300px; } }  /* long chapter lists scroll, so the lessons stay close */
 .chapters h2 { font-size: .85rem; color: var(--muted); font-weight: 500; padding: 6px 10px; }
 .chapters a { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; font-size: .9rem; line-height: 1.5; }
 .chapters a:hover { background: var(--surface-2); }
 .chapters a[aria-current="true"] { background: var(--brand-soft); color: var(--brand); }
 .chapters a .c { color: var(--muted); font-size: .8rem; flex: none; }
-.chapters a.zero { opacity: .55; }
+.chapters .empties { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.chapters .empties summary { cursor: pointer; padding: 8px 10px; border-radius: 10px; font-size: .85rem; color: var(--muted); }
+.chapters .empties summary:hover { background: var(--surface-2); }
+.chapters .empties ul { list-style: none; margin: 0; padding: 0 10px 6px; }
+.chapters .empties li { padding: 5px 0; font-size: .85rem; color: var(--muted); opacity: .8; line-height: 1.5; }
+.chapters .empties li[aria-current="true"] { color: var(--brand); opacity: 1; }
+.page-head .notice { margin: 10px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--brand-soft); font-size: .9rem; max-width: 68ch; }
+.page-head .notice a { color: var(--brand); text-decoration: underline; }
 .chapters .sub { padding-inline-start: 14px; border-inline-start: 1px solid var(--line); margin-inline-start: 10px; }
 
 .lessons { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
@@ -195,6 +202,7 @@ section.block { padding-block: 40px 8px; }
 .video .th { aspect-ratio: 16/9; max-width: 100%; background: var(--surface-2) center/cover no-repeat; display: grid; place-items: center; color: var(--brand); }
 .video .th svg { width: 44px; height: 44px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.3)); }
 .video span { display: block; padding: 10px 12px; font-size: .85rem; color: var(--muted); }
+.video small { display: block; padding: 0 12px 10px; margin-top: -6px; font-size: .78rem; color: var(--muted); opacity: .85; }
 
 /* search */
 .results-group { margin-top: 22px; }
@@ -288,3 +296,29 @@ footer.site a, .lede a, .empty-note a, .page-head p a, .block p a { text-decorat
 .player input[type=range] { height: 24px; }
 .lesson.nofile .play { cursor: default; opacity: .35; }
 .lesson.nofile .sub { font-style: normal; }
+
+/* texts explained more than once */
+.spine.stack { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, #000) 0 6px, var(--accent) 6px); box-shadow: 4px -4px 0 -1px var(--surface), 4px -4px 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 8px -8px 0 -1px var(--surface), 8px -8px 0 0 color-mix(in srgb, var(--accent) 35%, transparent); }
+.book .by, .page-head .byline { color: var(--muted); font-size: .85rem; margin-top: 2px; }
+.page-head .byline { font-size: .95rem; margin: 4px 0 0; }
+.exps { display: grid; gap: 10px; }
+.exp { display: grid; grid-template-columns: 36px 1fr; gap: 14px; align-items: start; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.exp:hover { border-color: var(--brand); }
+.exp .no { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); font-family: var(--f-display); }
+.exp h3 { font-family: var(--f-book); font-size: 1.15rem; font-weight: 700; line-height: 1.45; }
+.exp .full { color: var(--muted); font-size: .82rem; margin-top: 2px; overflow-wrap: anywhere; }
+.others { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 10px; font-size: .85rem; }
+.others span { color: var(--muted); }
+.others a { padding: 3px 12px; min-height: 24px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); text-decoration: none; }
+.others a:hover { border-color: var(--brand); color: var(--brand); }
+
+/* lesson tools on a series page */
+.list-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 12px; }
+.list-tools .field { flex: 1 1 240px; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; min-height: 44px; }
+.list-tools .field svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.list-tools .field input { flex: 1; min-width: 0; border: 0; background: none; color: inherit; font: inherit; font-size: .95rem; padding: 10px 0; outline: none; }
+.list-tools .field:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.list-tools select { min-height: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: inherit; font: inherit; font-size: .9rem; padding: 0 10px; }
+.list-tools .toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: .9rem; cursor: pointer; }
+.list-tools .toggle input { accent-color: var(--brand); width: 16px; height: 16px; }
+.list-tools .count { font-size: .85rem; color: var(--muted); }

@@ -1,0 +1,36 @@
+name: Weekly YouTube lessons
+
+# Sheikh Maher's lessons at the Rajhi mosque in Makkah are weekly, so the channel is checked once a week.
+# The nightly catalog refresh then picks up data/youtube.json.
+on:
+  schedule:
+    - cron: "0 0 * * 5"   # Friday, 03:00 Makkah time (before the nightly refresh at 03:30)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  youtube:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install yt-dlp hijridate==2.3.0
+      - name: Collect the Sheikh's lessons from the channel
+        run: python3 -I tools/youtube.py
+      - name: Commit if anything changed
+        run: |
+          git config user.name "catalog-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/youtube.json
+          if git diff --cached --quiet; then echo "No new lessons"; exit 0; fi
+          git commit -m "Add new YouTube lessons"
+          git push

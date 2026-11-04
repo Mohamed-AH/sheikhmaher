@@ -12,6 +12,7 @@ const Y = n => yf.format(n);
 const PR = new Intl.PluralRules('ar');
 const WORDS = {
   lesson: ['درس', 'درسان', 'دروس', 'درساً', 'درس', 'واحد'],
+  sharh: ['شرح', 'شرحان', 'شروح', 'شرحاً', 'شرح', 'واحد'],
   clip: ['مقطع', 'مقطعان', 'مقاطع', 'مقطعاً', 'مقطع', 'واحد'],
   item: ['مادة', 'مادتان', 'مواد', 'مادةً', 'مادة', 'واحدة'],
   series: ['سلسلة', 'سلسلتان', 'سلاسل', 'سلسلةً', 'سلسلة', 'واحدة'],
@@ -32,7 +33,7 @@ const hasFile = u => !!safeUrl(u) && !/^https?:\/\/[^/]+\/?$/i.test(u);
 // ---------- routing: clean paths on the real site (/book/16/), #c-16 in the single-file preview ----------
 const PATH_MODE = !!document.querySelector('base[data-router="path"]');
 const BASE = PATH_MODE ? new URL(document.baseURI).pathname : '';
-const toPath = r => !r ? '' : r.startsWith('c-') ? `book/${r.slice(2)}/` : r.startsWith('s-') ? `section/${r.slice(2)}/` : r + '/';
+const toPath = r => !r ? '' : r.startsWith('c-') ? `book/${r.slice(2)}/` : r.startsWith('s-') ? `section/${r.slice(2)}/` : r.startsWith('t-') ? `text/${r.slice(2)}/` : r + '/';
 function fromPath() {
   let p = decodeURIComponent(location.pathname);
   if (p.startsWith(BASE)) p = p.slice(BASE.length);
@@ -40,6 +41,7 @@ function fromPath() {
   let m;
   if ((m = p.match(/^book\/(\d+)$/))) return 'c-' + m[1];
   if ((m = p.match(/^section\/([\w-]+)$/))) return 's-' + m[1];
+  if ((m = p.match(/^text\/([\w-]+)$/))) return 't-' + m[1];
   return p;
 }
 const L = r => PATH_MODE ? BASE + toPath(r) : '#' + r;
@@ -98,7 +100,9 @@ const norm = s => String(s || '').replace(/[ً-ٰٟـ]/g, '').replace(/[إأآٱ
   .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
 // ---------- data ----------
-let C, S, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = [];
+let C, S, T = [], textByKey = {}, textOf = {}, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = null;
+const FILES = 'https://maheralqahtani.org/lfm/files/admin/';  // the catalog shortens this common start of audio links to "~"
+const fileUrl = u => u && u[0] === '~' ? FILES + u.slice(1) : u;
 function prep(data) {
   C = data.cats; S = data.sections;
   S.forEach(s => {
@@ -111,9 +115,8 @@ function prep(data) {
     c.id = Number(id);
     const ds = c.l.map(l => l[3]).filter(Boolean).sort();
     c.d0 = ds[0]; c.d1 = ds[ds.length - 1];
-    c.l.forEach(l => { l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, cat: c.id }); });
+    c.l.forEach(l => { l[2] = fileUrl(l[2]); l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, cat: c.id }); });
     c.a.forEach(a => lessonIndex.set(a[0], { a, cat: c.id }));
-    searchIndex.push({ type: 'cat', id: c.id, n: norm(c.t) });
   }
   // year range aggregated over descendants
   const agg = (id, seen = new Set()) => {
@@ -124,10 +127,24 @@ function prep(data) {
   };
   for (const id in C) agg(Number(id));
   S.forEach(s => {
-    s.l.forEach(l => { l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, sec: s.key }); });
+    s.l.forEach(l => { l[2] = fileUrl(l[2]); l[2] = hasFile(l[2]) ? l[2] : ''; lessonIndex.set(l[0], { l, sec: s.key }); });
     s.a.forEach(a => lessonIndex.set(a[0], { a, sec: s.key }));
   });
+  // texts explained more than once: all their explanations under one heading
+  T = (data.texts || []).map(t => ({ ...t, ids: t.ids.filter(i => C[i]) })).filter(t => t.ids.length > 1);
+  T.forEach(t => {
+    textByKey[t.k] = t; t.ids.forEach(i => { textOf[i] = t; });
+    const ds = t.ids.flatMap(i => [C[i].r0, C[i].r1]).filter(Boolean).sort(); t.r0 = ds[0]; t.r1 = ds[ds.length - 1];
+  });
+}
+// built on the first search, so pages that never search don't pay for it
+function getSearchIndex() {
+  if (searchIndex) return searchIndex;
+  searchIndex = [];
+  for (const id in C) searchIndex.push({ type: 'cat', id: C[id].id, n: norm(C[id].t) });
   lessonIndex.forEach((v, id) => searchIndex.push({ type: 'item', id, n: norm((v.l || v.a)[1]) }));
+  T.forEach(t => searchIndex.push({ type: 'text', k: t.k, n: norm(t.t + ' ' + t.by) }));
+  return searchIndex;
 }
 const total = () => S.reduce((n, s) => n + s.n, 0);
 const allSeries = () => Object.values(C).filter(c => c.up == null && catSection[c.id] && secByKey[catSection[c.id]].kind !== 'videos');
@@ -144,7 +161,7 @@ const yearsLabel = c => { const a = hyear(c.r0), b = hyear(c.r1); if (!a) return
 const isPdf = u => /\.pdf$/i.test(u || '');
 
 const crumbsFor = id => { const out = []; let c = C[id], guard = 0; while (c && guard++ < 12) { out.unshift(c); c = C[c.up]; } return out; };
-const origCat = c => c.x ? `${ORIGIN}/page/${c.p}` : `${ORIGIN}/page/${c.p}?category_id=${c.id}`;
+const origCat = c => c.src ? c.src : c.x ? `${ORIGIN}/page/${c.p}` : `${ORIGIN}/page/${c.p}?category_id=${c.id}`;
 const origItem = id => `${ORIGIN}/details/${id}`;
 
 // ---------- rendering helpers ----------
@@ -155,11 +172,11 @@ function bookCard(c, alt) {
     <div class="spine ${alt ? 'alt' : ''}"><span class="num">${N(c.n)}</span></div>
     <div><h3>${esc(c.t)}</h3><div class="meta">
       <span>${cnt(c.n, c.v.length && !c.l.length ? 'clip' : 'lesson')}</span>
-      ${c.kids.length ? `<span>${cnt(c.kids.length, 'chapter')}</span>` : ''}
+      ${liveKids(c).length ? `<span>${cnt(liveKids(c).length, 'chapter')}</span>` : ''}
       ${yrs ? `<span>${yrs}</span>` : ''}
       ${c.up != null && C[c.up] ? `<span class="pill">ضمن: ${esc(C[crumbsFor(c.id)[0].id].t)}</span>` : sec ? `<span class="pill">${esc(sec.t)}</span>` : ''}
 
-      ${c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب والدورة التي سُجّلت فيها">مجموعة حسب الدورة</span>` : ''}
+      ${c.src ? `<span class="pill">بث مباشر من جامع الراجحي بمكة</span>` : c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب والدورة التي سُجّلت فيها">مجموعة حسب الدورة</span>` : ''}
     </div></div></a>`;
 }
 // position in the series, and "(2 of 4)" when consecutive lessons share the same title
@@ -171,14 +188,33 @@ function numberLessons(groups) {
       let a = i, b = i;
       while (a > 0 && titles[a - 1] === titles[i]) a--;
       while (b < ls.length - 1 && titles[b + 1] === titles[i]) b++;
-      return { l, pos: ++pos, k: i - a + 1, of: b - a + 1 };
+      return { l, pos: ++pos, k: i - a + 1, of: b - a + 1, all: b - a + 1 === ls.length };
     })];
   });
 }
+const expLabel = c => { const t = textOf[c.id]; const lab = t && t.lab[c.id]; const y = yearsLabel(c).replace('نُشرت ', ''); return lab || (y ? `شرح ${y}` : c.t); };
+function textCard(t) {
+  return `<a class="book text" href="#t-${t.k}">
+    <div class="spine stack"><span class="num">${N(t.ids.length)}</span></div>
+    <div><h3>${esc(t.t)}</h3><div class="by">${esc(t.by)}</div><div class="meta">
+      <span>${cnt(t.ids.length, 'sharh')}</span><span>${cnt(t.n, 'lesson')}</span>
+    </div></div></a>`;
+}
+// a section's series with every multi-explained text folded into one card
+function shelfItems(list, key) {
+  const out = [], seen = new Set();
+  list.forEach(c => {
+    const t = textOf[c.id];
+    if (!t) out.push([c.top ? 1e9 + c.n : c.n, bookCard(c)]);
+    else if (!seen.has(t.k)) { seen.add(t.k); out.push([t.n, textCard(t)]); }
+  });
+  T.forEach(t => { if (key && (t.also || []).includes(key) && !seen.has(t.k)) { seen.add(t.k); out.push([t.n, textCard(t)]); } });  // books of two subjects
+  return out.sort((a, b) => b[0] - a[0]).map(x => x[1]).join('');
+}
 function lessonRow(l, catId, queueKey, m) {
   const [id, t, raw, d] = l;
-  const part = m && m.of > 1 ? ` <span class="part num">(${N(m.k)} من ${N(m.of)})</span>` : '';
-  const pos = m ? `<span class="num">الدرس ${N(m.pos)}</span>` : '';
+  const part = m && m.of > 1 && !m.all ? ` <span class="part num">(${N(m.k)} من ${N(m.of)})</span>` : '';
+  const pos = (m ? `<span class="num">الدرس ${N(m.pos)}</span>` : '') + (m && m.flat && m.g ? `<span>${esc(chapterName(m.g))}</span>` : '');
   const url = hasFile(raw) ? safeUrl(raw) : '';
   const pdf = isPdf(url);
   const h = heard.has(id);
@@ -288,18 +324,18 @@ function viewLibrary() {
 function libraryBody(q) {
   const nq = norm(q);
   return S.filter(s => s.series.length || s.n).map(s => {
-    const list = s.series.map(id => C[id]).filter(c => c && (!nq || norm(c.t).includes(nq)));
+    const list = s.series.map(id => C[id]).filter(c => c && (!nq || norm(c.t).includes(nq) || (textOf[c.id] && norm(textOf[c.id].t).includes(nq))));
     if (!list.length && (nq || !s.n)) return '';
     return `<section class="block"><div class="block-head"><h2>${esc(s.t)}</h2><a class="btn" href="#s-${s.key}">${cnt(s.n, 'item')}</a></div>
-      ${list.length ? `<div class="series-list">${list.sort((a, b) => b.n - a.n).map(c => bookCard(c)).join('')}</div>` : `<p style="color:var(--muted)">مواد هذا القسم غير مقسّمة إلى سلاسل. <a href="#s-${s.key}" style="color:var(--brand)">تصفحها</a></p>`}</section>`;
+      ${list.length ? `<div class="series-list">${shelfItems(list, nq ? null : s.key)}</div>` : `<p style="color:var(--muted)">مواد هذا القسم غير مقسّمة إلى سلاسل. <a href="#s-${s.key}" style="color:var(--brand)">تصفحها</a></p>`}</section>`;
   }).join('');
 }
 function viewSection(key) {
   const s = secByKey[key]; if (!s) return notFound();
-  const list = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => b.n - a.n);
+  const list = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => (b.top | 0) - (a.top | 0) || b.n - a.n);
   const withLessons = list.filter(c => c.n), empty = list.filter(c => !c.n);
   let body = '';
-  if (list.length) body += `<div class="series-list">${withLessons.map(c => bookCard(c)).join('')}</div>`;
+  if (list.length) body += `<div class="series-list">${shelfItems(withLessons, key)}</div>`;
   if (s.l.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.l, l => lessonRow(l, null, 's-' + key))}</div>`;
   if (s.a.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.a, articleRow, 40)}</div>`;
   if (empty.length) body += `<p style="color:var(--muted);margin-top:22px">سلاسل أخرى في هذا القسم: ${empty.map(c => esc(c.t)).join('، ')}</p>`;
@@ -308,17 +344,86 @@ function viewSection(key) {
     <a class="pill" href="${ORIGIN}/page/${s.id}" target="_blank" rel="noopener">القسم في الموقع الأصلي ↗</a></div></div></div>
     <div class="wrap" style="padding-block:24px"><h2 class="sr-only">محتوى القسم</h2>${body || '<div class="empty-note">لا توجد مواد في هذا القسم.</div>'}</div>`;
 }
-function chaptersNav(root, current) {
-  const item = (c, depth) => `<a href="#c-${c.id}" class="${c.n ? '' : 'zero'}" ${c.id === current ? 'aria-current="true"' : ''}><span>${esc(c.t.replace(/^\s*\[[^\]]+\]\s*/, ''))}</span><span class="c num">${N(c.n)}</span></a>
-    ${c.kids.length && depth < 4 ? `<div class="sub">${c.kids.map(k => C[k]).filter(Boolean).map(k => item(k, depth + 1)).join('')}</div>` : ''}`;
-  return `<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2><a href="#c-${root.id}" ${root.id === current ? 'aria-current="true"' : ''}><span>الكل</span><span class="c num">${N(root.n)}</span></a>${root.kids.map(k => C[k]).filter(Boolean).map(k => item(k, 0)).join('')}</nav>`;
+function viewText(k) {
+  const t = textByKey[k]; if (!t) return notFound();
+  const sec = secByKey[catSection[t.ids[0]]];
+  const a = hyear(t.r0), b = hyear(t.r1);
+  const items = t.ids.map((id, i) => {
+    const c = C[id], y = yearsLabel(c);
+    return `<a class="exp" href="#c-${id}"><span class="no num" aria-hidden="true">${N(i + 1)}</span>
+      <div><h3>${esc((t.h && t.h[id]) || c.t)}</h3>${t.h && t.h[id] && !t.h[id].startsWith(c.t) ? `<div class="full">${esc(c.t)}</div>` : ''}${t.note && t.note[id] ? `<div class="full">ضمن ${esc(t.note[id])}</div>` : ''}
+      <div class="chips num"><span>${cnt(c.n, 'lesson')}</span>${y ? `<span>${y}</span>` : ''}${secByKey[catSection[id]] !== sec ? `<span>${esc(secByKey[catSection[id]].t)}</span>` : ''}</div></div></a>`;
+  }).join('');
+  return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}<span>${esc(t.t)}</span></div>
+    <h1>${esc(t.t)}</h1><p class="byline">${esc(t.by)}</p>
+    <div class="meta"><span class="pill num">${cnt(t.ids.length, 'sharh')}</span><span class="pill num">${cnt(t.n, 'lesson')}</span>${a ? `<span class="pill">${a === b ? Y(a) : Y(a) + '–' + Y(b)}هـ</span>` : ''}</div>
+    <p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">شرح الشيخ هذا الكتاب أكثر من مرة، في أماكن وأعوام مختلفة. اختر الشرح الذي تريد متابعته؛ الترتيب من الأقدم إلى الأحدث.</p></div></div>
+    <div class="wrap" style="padding-block:24px"><h2 class="sr-only">الشروح</h2><div class="exps">${items}</div></div>`;
+}
+const chapterName = c => c.t.replace(/^\s*\[[^\]]+\]\s*/, '').replace(/^[-–]\s*/, '');
+const liveKids = c => c.kids.map(k => C[k]).filter(k => k && k.n);
+function emptyKids(c, depth = 0, out = []) {  // chapters the original site lists with no lessons yet, in book order
+  c.kids.map(k => C[k]).filter(Boolean).forEach(k => { if (!k.n) out.push(k); else if (depth < 4) emptyKids(k, depth + 1, out); });
+  return out;
+}
+function chaptersNav(root, current, asked = current) {
+  const item = (c, depth) => `<a href="#c-${c.id}" ${c.id === current ? 'aria-current="true"' : ''}><span>${esc(chapterName(c))}</span><span class="c num">${N(c.n)}</span></a>
+    ${depth < 4 && liveKids(c).length ? `<div class="sub">${liveKids(c).map(k => item(k, depth + 1)).join('')}</div>` : ''}`;
+  const empty = emptyKids(root);
+  const folded = empty.length ? `<details class="empties"${empty.some(k => k.id === asked) ? ' open' : ''}><summary>أبواب لم تُرفع دروسها بعد <span class="num">(${N(empty.length)})</span></summary>
+    <ul>${empty.map(k => `<li${k.id === asked ? ' aria-current="true"' : ''}>${esc(chapterName(k))}</li>`).join('')}</ul></details>` : '';
+  return `<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2><a href="#c-${root.id}" ${root.id === current ? 'aria-current="true"' : ''}><span>الكل</span><span class="c num">${N(root.n)}</span></a>${liveKids(root).map(k => item(k, 0)).join('')}${folded}</nav>`;
+}
+// ---------- lesson tools on a series page: search within it, sort, only what I haven't heard ----------
+let list = null;
+const sortPref = () => { const v = store.get('sort', 'book'); return ['book', 'new', 'old'].includes(v) ? v : 'book'; };
+function lessonTools(rows) {
+  const s = sortPref();
+  return `<div class="list-tools" role="search" aria-label="أدوات قائمة الدروس">
+    <label class="field">${I.search}<input type="search" id="lessonQ" placeholder="ابحث في ${N(rows.length)} درساً، أو اكتب رقم الدرس" autocomplete="off" aria-label="ابحث في دروس هذه السلسلة"></label>
+    <select id="lessonSort" aria-label="ترتيب الدروس">
+      <option value="book"${s === 'book' ? ' selected' : ''}>ترتيب الكتاب</option>
+      <option value="new"${s === 'new' ? ' selected' : ''}>الأحدث نشراً أولاً</option>
+      <option value="old"${s === 'old' ? ' selected' : ''}>الأقدم نشراً أولاً</option>
+    </select>
+    <label class="toggle"><input type="checkbox" id="lessonUnheard"> لم أستمع إليها</label>
+    <span class="count num" id="lessonCount" aria-live="polite"></span>
+  </div>`;
+}
+function lessonList(fresh) {
+  if (!list) return '';
+  const q = fresh ? '' : norm($('#lessonQ')?.value || ''), only = !fresh && $('#lessonUnheard')?.checked, sort = fresh || !$('#lessonSort') ? sortPref() : $('#lessonSort').value;
+  const terms = q ? q.split(' ') : [], num = /^\d+$/.test(q) ? Number(q) : 0;
+  let rows = list.rows.filter(m => (!only || !heard.has(m.l[0])) && (!terms.length || m.pos === num || terms.every(t => (m.n ??= norm(m.l[1] + ' ' + (m.g ? m.g.t : ''))).includes(t))));
+  if (sort !== 'book') {
+    const key = m => (m.l[3] || '') + String(m.l[0]).padStart(8, '0');
+    rows = rows.slice().sort((a, b) => sort === 'new' ? (key(a) < key(b) ? 1 : -1) : (key(a) < key(b) ? -1 : 1));
+  }
+  const flat = sort !== 'book' || terms.length > 0 || only;
+  const box = $('#lessonCount');
+  if (box && !fresh) box.textContent = terms.length || only ? `${N(rows.length)} من ${N(list.rows.length)}` : '';
+  if (!rows.length) return `<div class="empty-note">لا توجد دروس تطابق البحث.</div>`;
+  let lastG;
+  return paged(rows, m => {
+    m.flat = flat;
+    const head = !flat && m.g !== lastG ? (m.g ? `<div class="group-title"><a href="#c-${m.g.id}">${esc(m.g.t)}</a></div>` : '') : '';
+    lastG = m.g;
+    return head + lessonRow(m.l, m.g ? m.g.id : list.id, 'c-' + list.id, m);
+  }, 60);
+}
+function refreshList() {
+  const box = $('#lessonList'); if (!box || !list) return;
+  box.innerHTML = lessonList(); fixLinks(box); markPlaying();
 }
 function collectLessons(c, seen = new Set()) {
   if (!c || seen.has(c.id)) return []; seen.add(c.id);
   return [...c.l, ...c.kids.flatMap(k => collectLessons(C[k], seen))];
 }
-function viewCat(id) {
-  const c = C[id]; if (!c) return notFound();
+function viewCat(id, asking) {
+  if (!C[id]) return notFound();
+  const asked = C[id], top = crumbsFor(id)[0];
+  if (!asked.n && asked.up != null && top.n) return viewCat(top.id, id).replace('<!--note-->', `<p class="notice">لم تُرفع دروس «${esc(chapterName(asked))}» بعد، فهذه أبواب الكتاب التي فيها دروس. <a href="${origCat(asked)}" target="_blank" rel="noopener">تحقق في الموقع الأصلي ↗</a></p>`);
+  const c = asked; list = null;
   recent = [id, ...recent.filter(x => x !== id)].slice(0, 6); store.set('recent', recent);
   const chain = crumbsFor(id), root = chain[0];
   const sec = secByKey[catSection[root.id]];
@@ -327,33 +432,38 @@ function viewCat(id) {
   const done = all.filter(l => heard.has(l[0])).length;
   const isVideo = c.v.length || (sec && sec.key === 'videos');
   let body = '';
-  if (c.v.length) body += `<div class="videos">${c.v.map((v, i) => `<a class="video" href="https://www.youtube.com/watch?v=${esc(v)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(v)}/mqdefault.jpg)">${I.yt}</div><span>مقطع ${N(i + 1)}</span></a>`).join('')}</div>`;
+  if (c.v.length) body += `<div class="videos">${c.v.map((v, i) => { const [vid, vt, vd] = Array.isArray(v) ? v : [v]; return `<a class="video" href="https://www.youtube.com/watch?v=${esc(vid)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(vid)}/mqdefault.jpg)">${I.yt}</div><span>${vt ? esc(vt) : `مقطع ${N(i + 1)}`}</span>${vd ? `<small class="num">${hdate(vd)}</small>` : ''}</a>`; }).join('')}</div>`;
   const groups = [];
   if (c.l.length) groups.push([null, c.l]);
   const addKids = (cc, seen = new Set([cc.id])) => cc.kids.forEach(k => { const kc = C[k]; if (!kc || seen.has(k)) return; seen.add(k); if (kc.l.length) groups.push([kc, kc.l]); addKids(kc, seen); });
   addKids(c);
   if (groups.length) {
-    body += `<div class="lessons">${numberLessons(groups).map(([g, ls]) => (g ? `<div class="group-title"><a href="#c-${g.id}">${esc(g.t)}</a></div>` : '') + paged(ls, m => lessonRow(m.l, g ? g.id : c.id, 'c-' + c.id, m), 120)).join('')}</div>`;
+    const rows = [];
+    numberLessons(groups).forEach(([g, ls]) => ls.forEach(m => { m.g = g; rows.push(m); }));
+    list = { id: c.id, rows };
+    body += (rows.length >= 15 ? lessonTools(rows) : '') + `<div class="lessons" id="lessonList">${lessonList(true)}</div>`;
   }
   if (c.a.length) body += `<div class="lessons">${paged(c.a, articleRow, 40)}</div>`;
   if (!body) body = `<div class="lessons"><div class="empty-note">لا توجد دروس في هذا الباب حالياً.<br><a href="${origCat(c)}" target="_blank" rel="noopener" style="color:var(--brand)">تحقق في الموقع الأصلي ↗</a></div></div>`;
   const yrs = yearsLabel(c);
   const showNav = root.kids.length > 0;
   return `<div class="page-head"><div class="wrap">
-    <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}${chain.slice(0, -1).map(x => `<a href="#c-${x.id}">${esc(x.t)}</a><span aria-hidden="true">/</span>`).join('')}</div>
-    <h1>${esc(c.t)}</h1>
-    <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${c.kids.length ? `<span class="pill num">${cnt(c.kids.length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
+    <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}${textOf[root.id] ? `<a href="#t-${textOf[root.id].k}">${esc(textOf[root.id].t)}</a><span aria-hidden="true">/</span>` : ''}${chain.slice(0, -1).map(x => `<a href="#c-${x.id}">${esc(x.t)}</a><span aria-hidden="true">/</span>`).join('')}</div>
+    <h1>${esc(c.t)}</h1><!--note-->
+    ${textOf[root.id] && root.id === c.id ? `<nav class="others" aria-label="شروح أخرى لهذا الكتاب"><span>شروح أخرى لـ«${esc(textOf[root.id].t)}»:</span>${textOf[root.id].ids.filter(i => i !== c.id).map(i => `<a href="#c-${i}">${esc(expLabel(C[i]))}</a>`).join('')}</nav>` : ''}
+    <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${liveKids(c).length ? `<span class="pill num">${cnt(liveKids(c).length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
       </div>
-    ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
+    ${c.src ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">مجالس الشيخ المسجّلة من البث المباشر على قناة جامع الراجحي بمكة في يوتيوب، مرتبة حسب تاريخ البث.</p>` : ''}
+    ${c.x && !c.src ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
     <div class="toolbar">
       ${audioCount ? `<button class="btn primary" type="button" data-playall="c-${c.id}">${I.play} استمع من البداية</button>` : ''}
       ${audioCount ? `<button class="btn" type="button" data-continue="c-${c.id}">تابع أول درس لم تسمعه</button>` : ''}
       <button class="btn" type="button" data-save="${c.id}" aria-pressed="${saved.has(c.id)}">${I.bookmark} ${saved.has(c.id) ? 'محفوظ' : 'احفظ'}</button>
-      <a class="btn" href="${origCat(c)}" target="_blank" rel="noopener">${I.ext} في الموقع الأصلي</a>
+      <a class="btn" href="${origCat(c)}" target="_blank" rel="noopener">${I.ext} ${c.src ? 'قناة الجامع على يوتيوب' : 'في الموقع الأصلي'}</a>
     </div>
     ${audioCount ? `<div class="progress" title="${N(done)} من ${N(audioCount)}"><i style="width:${(done / audioCount * 100).toFixed(1)}%"></i></div><div style="font-size:.8rem;color:var(--muted);margin-top:4px">${N(done)} من ${N(audioCount)} درساً استمعت إليه</div>` : ''}
   </div></div>
-  <div class="wrap">${showNav ? `<div class="layout">${chaptersNav(root, c.id)}<div>${body}</div></div>` : `<div style="padding-block:24px">${body}</div>`}</div>`;
+  <div class="wrap">${showNav ? `<div class="layout">${chaptersNav(root, c.id, asking)}<div>${body}</div></div>` : `<div style="padding-block:24px">${body}</div>`}</div>`;
 }
 function viewSearch(q) {
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>البحث</span></div>
@@ -365,12 +475,13 @@ function results(q) {
   const nq = norm(q);
   if (nq.length < 2) return '<div class="empty-note">اكتب كلمتين على الأقل، مثل: الأصول الثلاثة، الصيام، الربا.</div>';
   const terms = nq.split(' ');
-  const hits = searchIndex.filter(x => terms.every(t => x.n.includes(t)));
-  const cats = hits.filter(h => h.type === 'cat').map(h => C[h.id]).sort((a, b) => (a.n ? 0 : 1) - (b.n ? 0 : 1) || (a.up == null ? 0 : 1) - (b.up == null ? 0 : 1) || b.n - a.n);
+  const hits = getSearchIndex().filter(x => terms.every(t => x.n.includes(t)));
+  const texts = hits.filter(h => h.type === 'text').map(h => textByKey[h.k]).filter(Boolean);
+  const cats = hits.filter(h => h.type === 'cat').map(h => C[h.id]).filter(c => c && (c.n || c.up == null)).sort((a, b) => (a.n ? 0 : 1) - (b.n ? 0 : 1) || (a.up == null ? 0 : 1) - (b.up == null ? 0 : 1) || b.n - a.n);
   const items = hits.filter(h => h.type === 'item').map(h => [h.id, lessonIndex.get(h.id)]);
   const mark = t => { let s = esc(t); return s; };
   let html = '';
-  if (cats.length) html += `<div class="results-group"><h2>الكتب والأبواب: ${cnt(cats.length, 'result')}</h2><div class="series-list">${cats.slice(0, 30).map(c => bookCard(c)).join('')}</div></div>`;
+  if (cats.length || texts.length) html += `<div class="results-group"><h2>الكتب والأبواب: ${cnt(cats.length + texts.length, 'result')}</h2><div class="series-list">${texts.map(textCard).join('')}${cats.slice(0, 30).map(c => bookCard(c)).join('')}</div></div>`;
   if (items.length) html += `<div class="results-group"><h2>الدروس والمقالات: ${cnt(items.length, 'result')}</h2><div class="lessons">${paged(items, ([id, v]) => {
     if (v.a) return articleRow(v.a);
     const where = v.cat ? `<a href="#c-${v.cat}">${esc(C[v.cat].t)}</a>` : `<a href="#s-${v.sec}">${esc(secByKey[v.sec].t)}</a>`;
@@ -407,6 +518,7 @@ function route() {
     html = viewSearch(lastQuery); nav = 'search'; title = 'البحث';
   }
   else if (h.startsWith('s-')) { html = viewSection(h.slice(2)); nav = 'library'; title = secByKey[h.slice(2)]?.t; }
+  else if (h.startsWith('t-')) { html = viewText(h.slice(2)); nav = 'library'; title = textByKey[h.slice(2)]?.t; }
   else if (h.startsWith('c-')) { html = viewCat(Number(h.slice(2))); nav = 'library'; title = C[Number(h.slice(2))]?.t; }
   else html = notFound();
   if (!title) title = { start: 'ابدأ من هنا', library: 'المكتبة', mine: 'متابعتي' }[h] || '';
@@ -519,6 +631,9 @@ document.addEventListener('submit', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'q2') { lastQuery = e.target.value; clearTimeout(window.__st); window.__st = setTimeout(() => { pagers = {}; $('#results').innerHTML = results(lastQuery); fixLinks($('#results')); markPlaying(); if (PATH_MODE) history.replaceState(null, '', L('search') + (lastQuery ? '?q=' + encodeURIComponent(lastQuery) : '')); }, 200); }
+  if (e.target.id === 'lessonQ') { clearTimeout(window.__lt); window.__lt = setTimeout(refreshList, 150); }
+  if (e.target.id === 'lessonSort') { store.set('sort', e.target.value); refreshList(); }
+  if (e.target.id === 'lessonUnheard') refreshList();
   if (e.target.id === 'libFilter') { $('#libBody').innerHTML = libraryBody(e.target.value); fixLinks($('#libBody')); }
 });
 document.addEventListener('keydown', e => {
@@ -576,7 +691,7 @@ if (PATH_MODE) {
   });
   // old #c-16 style links still work
   const legacy = location.hash.slice(1);
-  if (/^(c-\d+|s-[\w-]+|start|library|mine|search)$/.test(legacy)) history.replaceState(null, '', L(legacy));
+  if (/^(c-\d+|[st]-[\w-]+|start|library|mine|search)$/.test(legacy)) history.replaceState(null, '', L(legacy));
 } else window.addEventListener('hashchange', route);
 
 // ---------- boot ----------
@@ -590,7 +705,7 @@ function boot(data) {
   if (last && lessonIndex.get(last.id)?.l) { const v = lessonIndex.get(last.id); queue = v.cat ? queueFor('c-' + v.cat) : [v.l]; qi = Math.max(0, queue.findIndex(l => l[0] === last.id)); load(false); }
 }
 if (window.CATALOG) boot(window.CATALOG);
-else fetch('data/catalog.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(boot).catch(() => {
+else fetch(document.querySelector('meta[name="catalog"]')?.content || 'data/catalog.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(boot).catch(() => {
   // keep any pre-rendered page content; only say so when there is nothing to show
   const note = '<div class="empty-note" role="alert">تعذّر تحميل الفهرس. تحقق من الاتصال ثم حدّث الصفحة.</div>';
   if (app.dataset.prerendered) app.insertAdjacentHTML('afterbegin', note); else app.innerHTML = note;
