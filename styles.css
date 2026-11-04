@@ -62,8 +62,9 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 .nav { display: flex; gap: 4px; margin-inline-start: auto; }
 .nav a { padding: 6px 12px; border-radius: 999px; color: var(--muted); font-size: .92rem; }
 .nav a:hover, .nav a[aria-current="page"] { background: var(--brand-soft); color: var(--brand); }
-.icon-btn { border: 1px solid var(--line); background: var(--surface); width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; cursor: pointer; flex: none; }
-.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); width: 40px; height: 40px; padding: 0; border-radius: 12px; display: grid; place-items: center; cursor: pointer; flex: none; }
+/* margin:auto as well, because older iPhone Safari ignores place-items inside a button and leaves the icon at the left */
+.icon-btn svg { width: 20px; height: 20px; display: block; margin: auto; }
 @media (max-width: 760px) {
   .nav { display: none; }
   #theme { margin-inline-start: auto; }
