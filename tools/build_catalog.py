@@ -197,7 +197,7 @@ def course_key_for(segs, book):
     b = bnorm(book)
     for i, x in enumerate(segs):
         n = bnorm(x)
-        if n and (n in b or b in n) and len(n) >= 5: return '/'.join(segs[:i + 1])
+        if n and not GENERIC_DIR.match(x) and (n in b or b in n) and len(n) >= 5: return '/'.join(segs[:i + 1])
     return None
 
 def course_place(g):
@@ -207,6 +207,20 @@ def course_place(g):
     segs = keys.most_common(1)[0][0].split('/')[:-1]
     segs = [x for x in segs if not GENERIC_DIR.match(x) and not COURSE_NAME.match(norm(x)) and not re.search(r'\d', x)]
     return segs[-1].replace('_', ' ') if segs else ''
+def course_topic(g, book):
+    """the part of the book a course folder names, e.g. «الإعتكاف» in "العمدة الإعتكاف", «الحج» in "الدورة العلمية في الحج" """
+    keys = collections.Counter(f['_key'] for f in g['files'] if f['_key'])
+    if not keys: return ''
+    leaf = keys.most_common(1)[0][0].split('/')[-1].replace('_', ' ')
+    leaf = re.sub(r'^(الدورة العلمية|الدورات العلمية|الدورة|دورة)( في| فى)?\s*', '', leaf.strip())
+    strip = lambda w: re.sub(r'^ال', '', bnorm(w))
+    names = {book} | {f['_book'] for f in g['files'] if f['_book']}
+    names |= {canonical(n) for n in names}
+    names |= {ph for b in BOOKS['texts'] if b['t'] in names for ph in b['match']}
+    bw = {strip(w) for n in names for w in n.split()} - {'', 'شرح', 'كتاب'}
+    rest = [w for w in leaf.split() if strip(w) and strip(w) not in bw and not re.search(r'\d', w)]
+    if not rest or len(rest) > 3 or all(strip(w) in ('كتاب', 'شرح', 'رساله', 'متن') for w in rest): return ''
+    return ' '.join(rest)
 def course_groups(loose, label):
     """Split loose lessons into courses. Returns [{'title', 'files', 'folders'}] in display order."""
     known = known_books(loose)
@@ -246,7 +260,8 @@ def course_groups(loose, label):
         if not f['_book']: units.setdefault(('misc',), []).append(f); continue
         units.setdefault((book_of[f['_book']], f['_key']), []).append(f)
     misc = units.pop(('misc',), [])
-    # a stray lesson (or lessons stored outside any course folder) joins the largest course of the same book
+    # a stray lesson (or lessons stored outside any course folder) joins a course only when its "[ … ]" name
+    # points to that one course (e.g. «كتاب التوحيد - بالطائف»); otherwise it stays unsorted, as on the original site
     per_book = {}
     for (b, k), fs in units.items(): per_book.setdefault(b, []).append((k, fs))
     groups = []
@@ -256,10 +271,11 @@ def course_groups(loose, label):
         raw = lambda f: (PREFIX.match(f['title']) or [None, ''])[1].strip() if PREFIX.match(f['title']) else ''
         for u in us:
             if any(u is x for x in keep): continue
-            # a stray joins the course whose lessons carry the same "[ … ]" name (e.g. «كتاب التوحيد - بالطائف»), else the largest
             names = {raw(f) for f in u[1]} - {''}
-            home = max(keep, key=lambda x: (sum(raw(f) in names for f in x[1]), len(x[1])))
-            home[1].extend(u[1])
+            homes = [x for x in keep if any(raw(f) in names for f in x[1])]
+            if len(homes) == 1 and len(keep) > 1: homes[0][1].extend(u[1])
+            elif len(keep) == 1 and names and names <= {raw(f) for f in keep[0][1]} and not u[0]: keep[0][1].extend(u[1])
+            else: misc.extend(u[1]); report.setdefault('unsorted', []).append([f['id'] for f in u[1]])
         if sum(len(u[1]) for u in keep) < 3:
             for u in keep: misc.extend(u[1])
             continue
@@ -277,15 +293,6 @@ def course_groups(loose, label):
     for g in groups: by_book.setdefault(g['book'], []).append(g)
     for b, gs in by_book.items():
         gs.sort(key=lambda g: (dates.get(str(g['files'][0]['id']), '9999'), g['files'][0]['id']))
-        # folders started in the same month are chapters of one course (e.g. الصيام then الإعتكاف in Ramadan)
-        merged = []
-        for g in gs:
-            m0 = dates.get(str(g['files'][0]['id']), '')[:7]
-            if merged and m0 and m0 == dates.get(str(merged[-1]['files'][0]['id']), '')[:7]:
-                merged[-1]['files'] = sorted(merged[-1]['files'] + g['files'], key=lambda f: f['id'])
-                merged[-1]['folders'] = sorted(set(merged[-1]['folders']) | set(g['folders']))
-            else: merged.append(g)
-        gs[:] = merged
         if len(gs) > 1:
             base = max((g['title'] for g in gs), key=lambda t: (sum(g['title'] == t for g in gs), -len(t)))
             labels = [year_label(g['files']) for g in gs]
@@ -294,11 +301,19 @@ def course_groups(loose, label):
                 d0 = dates.get(str(g['files'][0]['id']))
                 if dup[i] and d0:
                     labels[i] = f'{HMONTHS[int(d0[5:7]) - 1]} {d0[:4]}هـ'.translate(AR_DIGITS)
-            final = [l if l and labels.count(l) == 1 else (l + ' - ' if l else '') + f'الدورة {ORD[i] if i < len(ORD) else i + 1}'
+            full = [(course_topic(g, g['title']), l) for g, l in zip(gs, labels)]
+            final = [l if l and full.count(full[i]) == 1 else (l + ' - ' if l else '') + f'الدورة {ORD[i] if i < len(ORD) else i + 1}'
                      for i, l in enumerate(labels)]
             for g, lab in zip(gs, final):
                 place = course_place(g)
-                g['title'] = f'{g["title"]} ({place + "، " if place else ""}{lab})'
+                # the folder's topic, only where the dates alone leave two courses looking alike
+                yr = lambda h: (dates.get(str(h['files'][0]['id']), '')[:4], dates.get(str(h['files'][-1]['id']), '')[:4])
+                a0, a1 = yr(g)
+                close = any(h is not g and a0 and (yr(h)[0] or '0') <= a1 and a0 <= (yr(h)[1] or '9') for h in gs)
+                topic = course_topic(g, g['title']) if close else ''
+                if topic and place and bnorm(topic) in bnorm(place): topic = ''
+                pre = '، '.join(x for x in (topic, place) if x)
+                g['title'] = f'{g["title"]} ({pre + "، " if pre else ""}{lab})'
     order = sorted(by_book.values(), key=lambda gs: -gs[0]['size'])
     groups = [g for gs in order for g in gs]
     out = [g for gs in order for g in gs]
