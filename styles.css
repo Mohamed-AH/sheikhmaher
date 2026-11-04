@@ -81,6 +81,10 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 .eyebrow { font-size: .8rem; letter-spacing: .04em; color: var(--accent); font-weight: 600; }
 .hero h1 { font-family: var(--f-display); font-weight: 600; font-size: clamp(2rem, 4.6vw, 3.4rem); line-height: 1.25; margin-top: 8px; }
 .hero h1 span { color: var(--brand); }
+.hero h1 small { font-size: .5em; color: var(--accent); font-weight: 500; white-space: nowrap; }
+.hero .tagline { font-size: 1.25rem; color: var(--brand); font-weight: 600; margin: 6px 0 0; }
+.page-head .byline.sheikh { color: var(--muted); font-size: .98rem; margin: 6px 0 0; }
+.page-head .byline.sheikh b { color: var(--ink, inherit); font-weight: 600; }
 .hero p.lede { color: var(--muted); max-width: 52ch; margin: 14px 0 22px; font-size: 1.05rem; }
 .searchbox { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 6px 14px; box-shadow: var(--shadow); max-width: 620px; }
 .searchbox svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
