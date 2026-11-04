@@ -352,7 +352,10 @@ function viewSection(key) {
   list = null;
   if (s.l.length) {
     list = { id: null, q: 's-' + key, plain: true, rows: s.l.map((l, i) => ({ l, pos: i + 1 })) };
-    body += `<div style="margin-top:20px">${s.l.length >= 15 ? lessonTools(list.rows, true) : ''}<div class="lessons" id="lessonList">${lessonList(true)}</div></div>`;
+    const audio = s.l.filter(playable).length, k = 's-' + key;
+    const btns = audio > 1 ? `<div class="toolbar" style="margin:0 0 14px"><button class="btn primary" type="button" data-playall="${k}">${I.play} استمع للقائمة متتابعة</button>
+      <button class="btn" type="button" data-continue="${k}">${spos.some(e => e.k === k) ? 'تابع من حيث توقفت' : 'تابع أول مادة لم تسمعها'}</button></div>` : '';
+    body += `<div style="margin-top:20px">${btns}${s.l.length >= 15 ? lessonTools(list.rows, true) : ''}<div class="lessons" id="lessonList">${lessonList(true)}</div></div>`;
   }
   if (s.a.length) body += `<div class="lessons" style="margin-top:20px">${paged(s.a, articleRow, 40)}</div>`;
   if (empty.length) body += `<p style="color:var(--muted);margin-top:22px">سلاسل أخرى في هذا القسم: ${empty.map(c => esc(c.t)).join('، ')}</p>`;
