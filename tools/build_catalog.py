@@ -8,7 +8,7 @@ How counts are derived:
   * lessons that sit in a subject's flat list but belong to no series are regrouped into
     "recovered" series using the [ book name ] prefix in their titles
 """
-import json, sys, re, os, glob, hashlib, datetime, urllib.parse
+import json, sys, re, os, glob, hashlib, datetime, urllib.parse, collections
 
 raw = json.load(open(sys.argv[1]))
 DCACHE, OUT, REPORT = sys.argv[2], sys.argv[3], sys.argv[4]
@@ -57,6 +57,7 @@ for holder in list(secs.values()) + list(cats.values()):
         link_title.setdefault(x['id'], x['title'])
 # scholars' titles and honorifics for series names (see tools/titles.json)
 TITLES = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'titles.json'), encoding='utf-8')).items() if not k.startswith('_')}
+BOOKS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'books.json'), encoding='utf-8'))
 for cid, c in cats.items():
     c['title'] = link_title.get(cid, c['title'])
     c['title'] = TITLES.get(c['title'].strip(), c['title'])
@@ -94,7 +95,7 @@ def total(cid, stack=()):
     own = len({f['id'] for f in c['files']}) + len({a['id'] for a in c['articles']}) + len(set(c['videos']))
     return own + sum(total(k, stack + (cid,)) for k in children.get(cid, []))
 
-out_cats, report = {}, {'counts': [], 'recovered': []}
+out_cats, report = {}, {'counts': [], 'recovered': [], 'attached': [], 'nested': []}
 for cid, c in cats.items():
     t = total(cid)
     out_cats[cid] = {
@@ -143,12 +144,83 @@ def year_label(fs):
     y = ys[0] if ys[0] == ys[-1] else f'{ys[0]}–{ys[-1]}'
     return f'{y}هـ'.translate(AR_DIGITS)
 
-def course_groups(loose, label):
-    """Split loose lessons into courses. Returns [{'title', 'files', 'folders'}] in display order."""
+
+# prefixes such as "[ الدورة العلمية ]" name a course, not a book
+COURSE_NAME = re.compile(r'^(الدوره العلميه( الموحده)?|الدورات العلميه|الدوره|دوره)$')
+CONT_DIR = re.compile(r'^(تابع|جديد|فرعي|ملف|مجلد|\d{1,4}|\d+ إلى \d+)$')
+def folder_segs(u):
+    p = urllib.parse.unquote(urllib.parse.urlparse(u).path)
+    p = re.sub(r'[\u200e\u200f\u2066-\u2069]', '', p).strip('/')
+    segs = [x.strip() for x in p.split('/')[:-1]]
+    if segs[:3] == ['lfm', 'files', 'admin']: segs = segs[3:]
+    elif segs[:2] == ['lfm', 'files']: segs = segs[2:]
+    return segs
+def lesson_dir(u):
+    segs = folder_segs(u)
+    while segs and CONT_DIR.match(segs[-1]): segs = segs[:-1]
+    return '/'.join(segs)
+def bnorm(t):
+    return re.sub(r'\s+', ' ', re.sub(r'[^\w\s]|[_\d٠-٩]', ' ', norm(t))).strip()
+def known_books(loose):
+    names = {}
+    for b in BOOKS['texts']:
+        for ph in b['match']: names[ph] = ph
     for f in loose:
         m = PREFIX.match(f['title'])
-        f['_book'] = m.group(1).strip() if m else ''
-        f['_key'] = course_key(f['url'])
+        if m and not COURSE_NAME.match(norm(m.group(1).strip())): names[m.group(1).strip()] = m.group(1).strip()
+    return sorted(((bnorm(k), v) for k, v in names.items() if len(bnorm(k)) >= 5), key=lambda kv: -len(kv[0]))
+def book_in(texts, known, single=False):
+    """the known book named in these texts (folder names, or a title); with single, ignore a title naming two books"""
+    for t in texts:
+        n = bnorm(t)
+        if len(n) < 5: continue
+        exact = [v for k, v in known if k == n]
+        inside = [v for k, v in known if re.search(r'(^| )و?' + re.escape(k) + r'( |$)', n)]  # longest first
+        around = [v for k, v in sorted(known, key=lambda kv: len(kv[0])) if not single and len(n.split()) >= 2 and ' ' + n + ' ' in ' ' + k + ' ']
+        if single:
+            core = {bnorm(h) for h in inside}
+            core = {c for c in core if not any(c != o and c in o for o in core)}
+            if len(core) > 1: return ''
+        hits = exact or inside or around
+        if hits: return canonical(hits[0])
+    return ''
+def canonical(name):
+    """the books.json name for a book when it is one of the listed texts"""
+    n = ' ' + bnorm(name) + ' '
+    for b in BOOKS['texts']:
+        for ph in b['match']:
+            if ' ' + bnorm(ph) + ' ' in n and bnorm(name) in (bnorm(ph), bnorm('شرح ' + ph), bnorm('كتاب ' + ph), bnorm('رسالة ' + ph)): return b['t']
+    return name
+def course_key_for(segs, book):
+    """folder path down to the folder that names the book, e.g. "دورة جازان/كشف الشبهات" """
+    if not book: return None
+    b = bnorm(book)
+    for i, x in enumerate(segs):
+        n = bnorm(x)
+        if n and (n in b or b in n) and len(n) >= 5: return '/'.join(segs[:i + 1])
+    return None
+
+def course_place(g):
+    """the trip or course folder above the book's folder, e.g. «دورة جازان» in "دورة جازان/كشف الشبهات" """
+    keys = collections.Counter(f['_key'] for f in g['files'] if f['_key'])
+    if not keys: return ''
+    segs = keys.most_common(1)[0][0].split('/')[:-1]
+    segs = [x for x in segs if not GENERIC_DIR.match(x) and not COURSE_NAME.match(norm(x)) and not re.search(r'\d', x)]
+    return segs[-1].replace('_', ' ') if segs else ''
+def course_groups(loose, label):
+    """Split loose lessons into courses. Returns [{'title', 'files', 'folders'}] in display order."""
+    known = known_books(loose)
+    for f in loose:
+        m = PREFIX.match(f['title'])
+        p = m.group(1).strip() if m else ''
+        segs = folder_segs(f['url'])
+        book = p if p and not COURSE_NAME.match(norm(p)) else ''
+        # the file's folders often name the book (".../الدورات العلمية/لمعة الإعتقاد/..."), and so does the title
+        if not book: book = book_in(segs[::-1], known) or (book_in([f['title']], known, single=True) if not p else '')
+        if not book and p and segs and not COURSE_NAME.match(norm(segs[-1])) and not GENERIC_DIR.match(segs[-1]):
+            book = 'الدورة العلمية في شرح ' + segs[-1].replace('_', ' ')  # e.g. "[ الدورة العلمية ]" in "مختصر البخاري/"
+        f['_book'] = book or p
+        f['_key'] = course_key_for(segs, f['_book']) or course_key(f['url'])
     # lessons with no "[ book ]" prefix take the book of their course folder
     by_key = {}
     for f in loose:
@@ -181,9 +253,13 @@ def course_groups(loose, label):
     for b, us in per_book.items():
         us.sort(key=lambda u: -len(u[1]))
         keep = [u for u in us if u[0] and len(u[1]) >= 2] or [us[0]]
+        raw = lambda f: (PREFIX.match(f['title']) or [None, ''])[1].strip() if PREFIX.match(f['title']) else ''
         for u in us:
             if any(u is x for x in keep): continue
-            keep[0][1].extend(u[1])
+            # a stray joins the course whose lessons carry the same "[ … ]" name (e.g. «كتاب التوحيد - بالطائف»), else the largest
+            names = {raw(f) for f in u[1]} - {''}
+            home = max(keep, key=lambda x: (sum(raw(f) in names for f in x[1]), len(x[1])))
+            home[1].extend(u[1])
         if sum(len(u[1]) for u in keep) < 3:
             for u in keep: misc.extend(u[1])
             continue
@@ -221,7 +297,8 @@ def course_groups(loose, label):
             final = [l if l and labels.count(l) == 1 else (l + ' - ' if l else '') + f'الدورة {ORD[i] if i < len(ORD) else i + 1}'
                      for i, l in enumerate(labels)]
             for g, lab in zip(gs, final):
-                g['title'] = f'{g["title"]} ({lab})'
+                place = course_place(g)
+                g['title'] = f'{g["title"]} ({place + "، " if place else ""}{lab})'
     order = sorted(by_book.values(), key=lambda gs: -gs[0]['size'])
     groups = [g for gs in order for g in gs]
     out = [g for gs in order for g in gs]
@@ -241,19 +318,74 @@ for x in secs.get(3, {}).get('cats', []):
     if x['id'] in cats and x['id'] not in parent:
         roots_by_page.setdefault(3, []).append(x['id'])
 
+
+def all_lessons(cid, seen=()):
+    c = out_cats.get(cid)
+    if not c or cid in seen: return []
+    return c['l'] + [l for k in c['kids'] for l in all_lessons(k, seen + (cid,))]
+def attach_to_site_series(roots, loose, label):
+    """A loose lesson stored in the same folder as one of the site's own series (and not naming another
+    book) belongs to that series, e.g. a stray «فضل الإسلام» lesson filed under «فضل_الإسلام»."""
+    where = collections.defaultdict(collections.Counter)
+    def walk(cid, seen=()):
+        if cid in seen or cid not in out_cats: return
+        for l in out_cats[cid]['l']: where[lesson_dir(l[2])][cid] += 1
+        for k in out_cats[cid]['kids']: walk(k, seen + (cid,))
+    for r in roots: walk(r)
+    owner = {}
+    for d, cn in where.items():
+        cid, n = cn.most_common(1)[0]
+        if d and n >= 3 and n >= 0.8 * sum(cn.values()): owner[d] = cid
+    known = known_books(loose)
+    keep = []
+    for f in loose:
+        cid = owner.get(lesson_dir(f['url']))
+        m = PREFIX.match(f['title'])
+        book = canonical(m.group(1).strip()) if m else book_in([f['title']], known, single=True)
+        if cid and (not book or bnorm(book) in bnorm(out_cats[cid]['t'])):
+            out_cats[cid]['l'] = sorted(out_cats[cid]['l'] + [lesson(f)], key=lambda l: l[0])
+            c = cid
+            while c is not None: out_cats[c]['n'] += 1; c = out_cats[c]['up']
+            report['attached'].append({'section': label, 'lesson': f['id'], 'title': f['title'], 'series': out_cats[cid]['t'], 'folder': lesson_dir(f['url'])})
+        else: keep.append(f)
+    return keep
+def nest_site_series(roots, made, loose, label):
+    """A small series of the site whose recordings sit in the folder of a larger grouped book is a part of
+    that book, e.g. «الفصل الثاني عشر …» in the folder of «الفرقان بين الحق والبطلان»."""
+    known = known_books(loose)
+    gdirs = {g: collections.Counter(lesson_dir(l[2]) for l in out_cats[g]['l']) for g in made}
+    for r in list(roots):
+        c = out_cats[r]
+        if c.get('x') or r in made: continue
+        ls = all_lessons(r)
+        if not ls or len(ls) > 40: continue
+        ds = collections.Counter(lesson_dir(l[2]) for l in ls)
+        best = max(made, key=lambda g: sum(ds[d] for d in gdirs[g]), default=None)
+        if best is None: continue
+        share = sum(ds[d] for d in gdirs[best])
+        if share < 0.8 * len(ls) or len(out_cats[best]['l']) <= len(ls): continue
+        other = book_in([c['t']], known, single=True)
+        if other and bnorm(other) not in bnorm(out_cats[best]['t']): continue
+        out_cats[best]['kids'].append(r); c['up'] = best; out_cats[best]['n'] += c['n']; roots.remove(r)
+        out_cats[best]['kids'].sort(key=lambda k: min((l[0] for l in all_lessons(k)), default=0))
+        report['nested'].append({'section': label, 'series': c['t'], 'id': r, 'into': out_cats[best]['t'], 'into_id': best})
+
 for pid, key, label, kind in SECTIONS:
     s = secs.get(pid, {})
     roots = list(dict.fromkeys(roots_by_page.get(pid, [])))
     loose = [f for f in dedupe(s.get('files', []), lambda f: f['id']) if f['id'] not in in_series]
     flat = []
     if kind == 'tree' and loose:
+        loose = attach_to_site_series(roots, loose, label)
+        made = []
         for g in course_groups(loose, label):
             fs, name = g['files'], g['title']
             next_id = 9000000 + fs[0]['id']  # stable across refreshes: tied to the group's first lesson
             out_cats[next_id] = {'t': name, 'p': pid, 'up': None, 'kids': [], 'n': len(fs), 'listed': len(fs), 'x': 1,
                                  'l': [lesson(f) for f in fs], 'a': [], 'v': []}
             report['recovered'].append({'section': label, 'title': name, 'lessons': len(fs), 'folders': g['folders']})
-            roots.append(next_id)
+            roots.append(next_id); made.append(next_id)
+        nest_site_series(roots, made, loose, label)
     else:
         flat = loose
     arts = dedupe(s.get('articles', []), lambda a: a['id'])
@@ -262,7 +394,6 @@ for pid, key, label, kind in SECTIONS:
                      'l': [lesson(f) for f in flat], 'a': [article(a) for a in arts], 'n': n})
 
 # ---------- texts explained more than once (see tools/books.json) ----------
-BOOKS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'books.json'), encoding='utf-8'))
 def loose_re(phrase):
     """regex for a phrase that tolerates hamza/ta-marbuta/alif-maqsura spellings and diacritics"""
     alt = {'ا': '[اأإآ]', 'أ': '[اأإآ]', 'إ': '[اأإآ]', 'آ': '[اأإآ]', 'ة': '[ةه]', 'ه': '[ةه]', 'ى': '[ىي]', 'ي': '[ىي]'}
