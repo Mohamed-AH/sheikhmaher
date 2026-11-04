@@ -35,6 +35,13 @@ jobs:
           git add data/
           if git diff --cached --quiet -- data/catalog.json; then echo "No new lessons"; exit 0; fi
           git commit -m "Refresh lesson catalog"
+          # the crawl takes a while; if main moved meanwhile, put this commit on top of it. If the move changed
+          # the catalog tools or the catalog itself, this crawl was built with old rules: skip, tomorrow's run redoes it
+          git fetch -q origin main
+          if ! git diff --quiet HEAD~1 origin/main -- tools/ data/catalog.json; then
+            echo "::warning::main changed the catalog or its tools during the crawl; tomorrow's run will refresh it"; exit 0
+          fi
+          git rebase -q origin/main
           git push
 
   deploy:
