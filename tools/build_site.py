@@ -180,8 +180,8 @@ home_desc = f'{SHEIKH}: شروح المتون والمحاضرات والخطب 
 sitemap = [('', 1.0)]
 
 # home
-home = (f'<section class="hero"><div class="wrap"><div><div class="eyebrow">{e(SHEIKH)}</div>'
-        '<h1>دروس الشيخ بواجهة جديدة، <span>مرتبة كتاباً كتاباً</span></h1>'
+home = ('<section class="hero"><div class="wrap"><div><div class="eyebrow">دروس ومحاضرات</div>'
+        '<h1>فضيلة الشيخ ماهر بن ظافر القحطاني <small>حفظه الله</small></h1><p class="tagline">مرتبة كتاباً كتاباً، بواجهة جديدة</p>'
         '<p class="lede">واجهة مساندة لموقع معرفة السنن والآثار، تعرض شروح المتون والمحاضرات والخطب المنشورة فيه مرتبةً حسب الكتب والأبواب، تيسيراً على طلاب العلم.</p></div></div></section>'
         '<section class="block"><div class="wrap"><div class="block-head"><h2>أقسام المكتبة</h2></div><div class="shelf">'
         + ''.join(f'<a class="subject" href="section/{s["key"]}/"><h3>{e(s["t"])}</h3><div class="meta num">{cnt(s["n"], "article" if s["kind"] == "articles" else "item")}</div></a>' for s in S if s['n'])
@@ -225,7 +225,7 @@ for t in TEXTS:
     items = ''.join(f'<a class="exp" href="book/{i}/"><span class="no num" aria-hidden="true">{N(n + 1)}</span><div><h3>{e(t.get("h", {}).get(str(i)) or C[i]["t"])}</h3>'
                     + (f'<div class="full">{e(C[i]["t"])}</div>' if not t.get('h', {}).get(str(i), C[i]['t']).startswith(C[i]['t']) else '') + f'<div class="chips num"><span>{cnt(C[i]["n"], "lesson")}</span></div></div></a>'
                     for n, i in enumerate(t['ids']) if i in C)
-    body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1>{e(t["t"])}</h1><p class="byline">{e(t["by"])}</p>'
+    body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1>{e(t["t"])}</h1><p class="byline">{e(t["by"])}</p><p class="byline sheikh">شروح فضيلة الشيخ <b>ماهر بن ظافر القحطاني</b> حفظه الله</p>'
             f'<div class="meta"><span class="pill num">{cnt(len(t["ids"]), "sharh")}</span><span class="pill num">{cnt(t["n"], "lesson")}</span></div></div></div>'
             f'<div class="wrap" style="padding-block:24px"><h2 class="sr-only">الشروح</h2><div class="exps">{items}</div></div>')
     desc = f'شروح «{t["t"]}» {t["by"]}، ل{SHEIKH}: {cnt(len(t["ids"]), "sharh")} في أماكن وأعوام مختلفة، {cnt(t["n"], "lesson")}.'
@@ -242,7 +242,9 @@ for i, c in C.items():
     kids = [k for k in c['kids'] if k in C and C[k]['n']]  # chapters with no lessons yet are folded below
     empty = [k for k in c['kids'] if k in C and not C[k]['n']]
     unit = 'clip' if c['v'] and not c['l'] else 'lesson'
+    by = 'شرح' if re.match(r'\s*(\[[^\]]*\]\s*)?(شرح|التعليق|الدورة العلمية في شرح|تفسير)', c['t']) else 'ل'
     body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1>{e(c["t"])}</h1>'
+            f'<p class="byline sheikh">{by}{" " if by == "شرح" else ""}فضيلة الشيخ <b>ماهر بن ظافر القحطاني</b> حفظه الله</p>'
             f'<div class="meta"><span class="pill num">{cnt(c["n"], unit)}</span>' + (f'<span class="pill num">{cnt(len(kids), "chapter")}</span>' if kids else '') + '</div></div></div>'
             '<div class="wrap" style="padding-block:24px">'
             + ('<nav class="chapters" aria-label="الأبواب"><h2>أبواب الكتاب</h2>' + ''.join(f'<a href="book/{k}/"><span>{e(C[k]["t"])}</span><span class="c num">{N(C[k]["n"])}</span></a>' for k in kids)

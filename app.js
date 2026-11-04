@@ -270,8 +270,9 @@ function viewHome() {
   return `
   <section class="hero"><div class="wrap">
     <div>
-      <div class="eyebrow">فضيلة الشيخ ماهر بن ظافر القحطاني حفظه الله</div>
-      <h1>دروس الشيخ بواجهة جديدة، <span>مرتبة كتاباً كتاباً</span></h1>
+      <div class="eyebrow">دروس ومحاضرات</div>
+      <h1>فضيلة الشيخ ماهر بن ظافر القحطاني <small>حفظه الله</small></h1>
+      <p class="tagline">مرتبة كتاباً كتاباً، بواجهة جديدة</p>
       <p class="lede">واجهة مساندة لموقع معرفة السنن والآثار، تعرض شروح المتون والمحاضرات والخطب المنشورة فيه مرتبةً حسب الكتب والأبواب، تيسيراً على طلاب العلم.</p>
       <form class="searchbox" id="heroSearch" role="search">${I.search}<input id="q" type="search" placeholder="ابحث عن كتاب أو درس، مثل: كتاب التوحيد" autocomplete="off"><kbd>/</kbd></form>
       <div class="chips">${['التوحيد', 'الصيام', 'الحج', 'الطهارة', 'السيرة', 'الخوارج'].map(w => `<button class="chip" type="button" data-q="${w}">${w}</button>`).join('')}</div>
@@ -355,7 +356,7 @@ function viewText(k) {
       <div class="chips num"><span>${cnt(c.n, 'lesson')}</span>${y ? `<span>${y}</span>` : ''}${secByKey[catSection[id]] !== sec ? `<span>${esc(secByKey[catSection[id]].t)}</span>` : ''}</div></div></a>`;
   }).join('');
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}<span>${esc(t.t)}</span></div>
-    <h1>${esc(t.t)}</h1><p class="byline">${esc(t.by)}</p>
+    <h1>${esc(t.t)}</h1><p class="byline">${esc(t.by)}</p><p class="byline sheikh">شروح فضيلة الشيخ <b>ماهر بن ظافر القحطاني</b> حفظه الله</p>
     <div class="meta"><span class="pill num">${cnt(t.ids.length, 'sharh')}</span><span class="pill num">${cnt(t.n, 'lesson')}</span>${a ? `<span class="pill">${a === b ? Y(a) : Y(a) + '–' + Y(b)}هـ</span>` : ''}</div>
     <p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">شرح الشيخ هذا الكتاب أكثر من مرة، في أماكن وأعوام مختلفة. اختر الشرح الذي تريد متابعته؛ الترتيب من الأقدم إلى الأحدث.</p></div></div>
     <div class="wrap" style="padding-block:24px"><h2 class="sr-only">الشروح</h2><div class="exps">${items}</div></div>`;
@@ -366,6 +367,8 @@ function emptyKids(c, depth = 0, out = []) {  // chapters the original site list
   c.kids.map(k => C[k]).filter(Boolean).forEach(k => { if (!k.n) out.push(k); else if (depth < 4) emptyKids(k, depth + 1, out); });
   return out;
 }
+// whose lessons these are, under every series title: «شرح» for explanations of a book, «لفضيلة» otherwise
+const byline = c => `<p class="byline sheikh">${/^\s*(\[[^\]]*\]\s*)?(شرح|التعليق|الدورة العلمية في شرح|تفسير)/.test(c.t) ? 'شرح ' : 'ل'}فضيلة الشيخ <b>ماهر بن ظافر القحطاني</b> حفظه الله</p>`;
 function chaptersNav(root, current, asked = current) {
   const item = (c, depth) => `<a href="#c-${c.id}" ${c.id === current ? 'aria-current="true"' : ''}><span>${esc(chapterName(c))}</span><span class="c num">${N(c.n)}</span></a>
     ${depth < 4 && liveKids(c).length ? `<div class="sub">${liveKids(c).map(k => item(k, depth + 1)).join('')}</div>` : ''}`;
@@ -449,7 +452,7 @@ function viewCat(id, asking) {
   const showNav = root.kids.length > 0;
   return `<div class="page-head"><div class="wrap">
     <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span>${sec ? `<a href="#s-${sec.key}">${esc(sec.t)}</a><span aria-hidden="true">/</span>` : ''}${textOf[root.id] ? `<a href="#t-${textOf[root.id].k}">${esc(textOf[root.id].t)}</a><span aria-hidden="true">/</span>` : ''}${chain.slice(0, -1).map(x => `<a href="#c-${x.id}">${esc(x.t)}</a><span aria-hidden="true">/</span>`).join('')}</div>
-    <h1>${esc(c.t)}</h1><!--note-->
+    <h1>${esc(c.t)}</h1>${byline(c)}<!--note-->
     ${textOf[root.id] && root.id === c.id ? `<nav class="others" aria-label="شروح أخرى لهذا الكتاب"><span>شروح أخرى لـ«${esc(textOf[root.id].t)}»:</span>${textOf[root.id].ids.filter(i => i !== c.id).map(i => `<a href="#c-${i}">${esc(expLabel(C[i]))}</a>`).join('')}</nav>` : ''}
     <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${liveKids(c).length ? `<span class="pill num">${cnt(liveKids(c).length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
       </div>
