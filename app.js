@@ -336,7 +336,12 @@ function viewSection(key) {
   const ser = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => (b.top | 0) - (a.top | 0) || b.n - a.n);
   const withLessons = ser.filter(c => c.n), empty = ser.filter(c => !c.n);
   let body = '';
-  if (ser.length) body += `<div class="series-list">${shelfItems(withLessons, key)}</div>`;
+  if (s.groups) body += s.groups.map(([t, ids], gi) => {  // the videos section: series under topics, folded
+    const cs = ids.map(i => C[i]).filter(c => c && c.n); if (!cs.length) return '';
+    return `<details class="vgroup"><summary><span class="t">${esc(t)}</span><span class="c num">${cnt(cs.length, 'series')}، ${cnt(cs.reduce((a, c) => a + c.n, 0), 'clip')}</span></summary>
+      <div class="series-list">${shelfItems(cs, key)}</div></details>`;
+  }).join('');
+  else if (ser.length) body += `<div class="series-list">${shelfItems(withLessons, key)}</div>`;
   list = null;
   if (s.l.length) {
     list = { id: null, q: 's-' + key, plain: true, rows: s.l.map((l, i) => ({ l, pos: i + 1 })) };
@@ -440,7 +445,7 @@ function viewCat(id, asking) {
   const done = all.filter(l => heard.has(l[0])).length;
   const isVideo = c.v.length || (sec && sec.key === 'videos');
   let body = '';
-  if (c.v.length) body += `<div class="videos">${c.v.map((v, i) => { const [vid, vt, vd] = Array.isArray(v) ? v : [v]; return `<a class="video" href="https://www.youtube.com/watch?v=${esc(vid)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(vid)}/mqdefault.jpg)">${I.yt}</div><span>${vt ? esc(vt) : `مقطع ${N(i + 1)}`}</span>${vd ? `<small class="num">${hdate(vd)}</small>` : ''}</a>`; }).join('')}</div>`;
+  if (c.v.length) body += `<div class="videos">${paged(c.v.map((v, i) => [v, i]), ([v, i]) => { const [vid, vt, vd] = Array.isArray(v) ? v : [v]; return `<a class="video" href="https://www.youtube.com/watch?v=${esc(vid)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(vid)}/mqdefault.jpg)">${I.yt}</div><span>${vt ? esc(vt) : `مقطع ${N(i + 1)}`}</span>${vd ? `<small class="num">${hdate(vd)}</small>` : ''}</a>`; }, 48)}</div>`;
   const groups = [];
   if (c.l.length) groups.push([null, c.l]);
   const addKids = (cc, seen = new Set([cc.id])) => cc.kids.forEach(k => { const kc = C[k]; if (!kc || seen.has(k)) return; seen.add(k); if (kc.l.length) groups.push([kc, kc.l]); addKids(kc, seen); });

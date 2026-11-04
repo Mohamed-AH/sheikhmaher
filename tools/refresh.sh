@@ -8,6 +8,9 @@ python3 -I tools/crawl.py "$W/cache" "$W/data.json"
 python3 -I tools/date_urls.py "$W/data.json" > "$W/urls.txt"
 mkdir -p "$W/dcache" && python3 -I tools/prefetch.py "$W/dcache" "$W/urls.txt" 4
 python3 -I tools/build_catalog.py "$W/data.json" "$W/dcache" "$W/catalog.json" "$W/report.json"
+# titles for videos the site added since last night (only new ones are looked up), then rebuild with them
+python3 -I tools/video_titles.py "$W/catalog.json" data/video_titles.json
+python3 -I tools/build_catalog.py "$W/data.json" "$W/dcache" "$W/catalog.json" "$W/report.json"
 python3 - "$W/catalog.json" data/catalog.json <<'PY'
 import json, sys
 tot = lambda p: sum(s['n'] for s in json.load(open(p))['sections'])

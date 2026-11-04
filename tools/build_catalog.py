@@ -95,6 +95,23 @@ def total(cid, stack=()):
     own = len({f['id'] for f in c['files']}) + len({a['id'] for a in c['articles']}) + len(set(c['videos']))
     return own + sum(total(k, stack + (cid,)) for k in children.get(cid, []))
 
+# YouTube titles of the site's videos (tools/video_titles.py), without the Sheikh's name, which every page
+# already shows: «… || لفضيلة الشيخ ماهر بن ظافر القحطاني حفظه الله» → «…»
+VT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'video_titles.json')
+VTITLES = json.load(open(VT, encoding='utf-8')) if os.path.exists(VT) else {}
+HON = r'(ل?فضيلة|ل?ل?شي[خح]?(نا)?|ال?شي[خح]?|الفاضل|القارئ|الهُ?مام|بصوت|أ?\.?د\.|\|\||[|/:"(])'
+NAME_TAIL = re.compile(r'\s*(\|\||\||//|[-–/:،,"(])?\s*(' + HON + r'\s*)+(أبو|أبي)?\s*(عبد ?الله)?\s*'
+                       r'(ماهر(\s*(بن\s*)?(ظافر|ظاهر))?(\s*آل\s*ظافر)?(\s*(ال)?قحطان[يى])?|(ال)?قحطان[يى])'
+                       r'(\s|حفظه|حفظهُ|ا?الله|اللّٰه|ﷲ|ورعاه|تعالى|[".)])*$')
+def vtitle(i):
+    t = (VTITLES.get(i) or {}).get('t', '').replace('_', ' ')
+    t = re.sub(r'[\u200e\u200f\u202a-\u202e]|\s*YouTube\s*$|\.(wmv|mp4|avi|flv)\b', '', t)
+    t = re.sub(r'\s+', ' ', NAME_TAIL.sub('', t)).strip(' .-–|/')
+    return t
+def video(i):
+    t = vtitle(i)
+    return [i, t] if t else i
+
 out_cats, report = {}, {'counts': [], 'recovered': [], 'attached': [], 'nested': []}
 for cid, c in cats.items():
     t = total(cid)
@@ -103,7 +120,7 @@ for cid, c in cats.items():
         'listed': c['listed_count'],
         'l': [lesson(f) for f in dedupe(c['files'], lambda f: f['id'])],
         'a': [article(a) for a in dedupe(c['articles'], lambda a: a['id'])],
-        'v': list(dict.fromkeys(c['videos'])),
+        'v': [video(i) for i in dict.fromkeys(c['videos'])],
     }
     if c['listed_count'] != t:
         report['counts'].append({'id': cid, 'title': c['title'], 'site_says': c['listed_count'], 'actual': t,
@@ -542,6 +559,21 @@ for b in BOOKS['texts']:
         if out_cats[i].get('x'): out_cats[i]['t'] = head[i]  # grouped series take the proper name too
     texts.append({'k': b['key'], 't': b['t'], 'by': b.get('by', ''), 'ids': ids, 'lab': lab, 'h': head, 'note': note,
                   'n': sum(out_cats[i]['n'] for i in ids), **({'also': b['also']} if b.get('also') else {})})
+
+# the videos section has well over a hundred series: show them under topics (tools/video_groups.json, by the
+# original site's series id). The Rajhi broadcasts come first; a new series nobody has placed yet goes under
+# the last topic (مرئيات متنوعة) and is listed in the report so a person can place it.
+VG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools', 'video_groups.json')
+vsec = next((x for x in sections if x['key'] == 'videos'), None)
+if vsec and os.path.exists(VG):
+    topics = json.load(open(VG, encoding='utf-8'))
+    live = [c for c in vsec['series'] if out_cats.get(c, {}).get('src')]
+    groups = ([['بث مباشر من جامع الراجحي بمكة', live]] if live else []) + [[g['t'], [c for c in g['ids'] if c in vsec['series']]] for g in topics]
+    placed = {c for _, ids in groups for c in ids}
+    loose = [c for c in vsec['series'] if c not in placed]
+    if loose and groups: groups[-1][1] += loose
+    vsec['groups'] = [g for g in groups if g[1]]
+    report['video_groups_unplaced'] = [(c, out_cats[c]['t']) for c in loose]
 
 built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 json.dump({'built': built, 'sections': sections, 'cats': out_cats, 'texts': texts}, open(OUT, 'w'), ensure_ascii=False, separators=(',', ':'))

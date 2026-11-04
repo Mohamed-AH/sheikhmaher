@@ -220,7 +220,9 @@ for s in S:
     cr = [('الرئيسية', ''), ('المكتبة', 'library/'), (s['t'], path)]
     body = (f'<div class="page-head"><div class="wrap">{crumbs_html(cr)}<h1 class="kufi">{e(s["t"])}</h1>'
             f'<div class="meta"><span class="pill num">{cnt(s["n"], "item")}</span></div></div></div><div class="wrap" style="padding-block:24px">'
-            + (f'<div class="series-list">' + shelf(s['series'], s['key']) + '</div>' if s['series'] else '')
+            + (''.join(f'<details class="vgroup"><summary><span class="t">{e(g[0])}</span></summary><div class="series-list">' + shelf(g[1], s['key']) + '</div></details>'
+                       for gi, g in enumerate(s['groups'])) if s.get('groups')
+               else f'<div class="series-list">' + shelf(s['series'], s['key']) + '</div>' if s['series'] else '')
             + (lessons_html(s['l'][:300]) if s['l'] else '')
             + (''.join(f'<a class="article" href="{ORIGIN}/details/{int(a[0])}" target="_blank" rel="noopener"><h3>{e(a[1])}</h3><p>{e(a[2])}</p></a>' for a in s['a']) if s['a'] else '')
             + '</div>')
@@ -263,6 +265,8 @@ for i, c in C.items():
                + '</nav>' if kids or empty else '')
             + ('<h2 class="sr-only">الدروس</h2>' + lessons_html(c['l']) if c['l'] else '')
             + (''.join(f'<a class="article" href="{ORIGIN}/details/{int(a[0])}" target="_blank" rel="noopener"><h3>{e(a[1])}</h3></a>' for a in c['a']) if c['a'] else '')
+            + ('<h2 class="sr-only">المقاطع</h2><ul class="vlist">' + ''.join(f'<li><a href="https://www.youtube.com/watch?v={e(v[0])}" target="_blank" rel="noopener">{e(v[1])}</a></li>'
+                                                                    for v in c['v'] if isinstance(v, list) and len(v) > 1 and v[1]) + '</ul>' if c['v'] else '')
             + '</div>')
     parent = f' من «{ch[0][1]["t"]}»' if len(ch) > 1 else ''
     desc = f'«{c["t"]}»{parent}: {cnt(c["n"], unit)} ل{SHEIKH}، للاستماع والتنزيل' + (f'، في {cnt(len(kids), "chapter")}' if kids else '') + '.'
