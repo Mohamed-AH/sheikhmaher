@@ -94,7 +94,8 @@ tpl = open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read()
 head_end = tpl.index('</head>')
 main_re = re.compile(r'<main id="app"[^>]*>.*?</main>', re.S)
 
-CSP = ("default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; "
+CSP = ("default-src 'self'; script-src 'self' https://static.cloudflareinsights.com https://www.youtube.com; "
+       "frame-src https://www.youtube-nocookie.com https://www.youtube.com; "
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
        "img-src 'self' data: https://i.ytimg.com; media-src https://maheralqahtani.org; "
        "connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'")

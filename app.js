@@ -398,8 +398,8 @@ function chaptersNav(root, current, asked = current) {
 }
 // ---------- video tools on a series page: search the titles, sort ----------
 let vlist = null;
-const videoCard = ([v, i]) => { const [vid, vt, vd] = Array.isArray(v) ? v : [v];
-  return `<a class="video" href="https://www.youtube.com/watch?v=${esc(vid)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(vid)}/mqdefault.jpg)">${I.yt}</div><span>${vt ? esc(vt) : `مقطع ${N(i + 1)}`}</span>${vd ? `<small class="num">${hdate(vd)}</small>` : ''}</a>`; };
+const videoCard = ([v, i]) => { const [vid, vt, vd] = Array.isArray(v) ? v : [v], w = vheard.has(vid), at = !w && vresume[vid];
+  return `<a class="video${w ? ' watched' : ''}" href="https://www.youtube.com/watch?v=${esc(vid)}" target="_blank" rel="noopener" data-vid="${esc(vid)}"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(vid)}/mqdefault.jpg)">${I.yt}${w ? '<i class="seen">شوهد</i>' : at ? `<i class="seen num">${fmt(at)}</i>` : ''}</div><span>${vt ? esc(vt) : `مقطع ${N(i + 1)}`}</span>${vd ? `<small class="num">${hdate(vd)}</small>` : ''}</a>`; };
 function videoTools() {
   return `<div class="list-tools" role="search" aria-label="أدوات قائمة المقاطع">
     <label class="field">${I.search}<input type="search" id="videoQ" placeholder="ابحث في عناوين ${N(vlist.rows.length)} مقطعاً" autocomplete="off" aria-label="ابحث في مقاطع هذه السلسلة"></label>
@@ -410,8 +410,7 @@ function videoTools() {
     <span class="count num" id="videoCount" aria-live="polite"></span>
   </div>`;
 }
-function videoList(fresh) {
-  if (!vlist) return '';
+function videoRows(fresh) {
   const q = fresh ? '' : norm($('#videoQ')?.value || ''), terms = q ? q.split(' ') : [];
   let rows = vlist.rows.filter(m => !terms.length || terms.every(t => (m.n ??= norm(Array.isArray(m[0]) ? m[0][1] || '' : '')).includes(t)));
   const sort = fresh ? 'site' : $('#videoSort')?.value || 'site';
@@ -420,10 +419,15 @@ function videoList(fresh) {
     const d = m => (Array.isArray(m[0]) && m[0][2]) || '';
     rows = rows.slice().sort((a, b) => !d(a) - !d(b) || (sort === 'new' ? d(b).localeCompare(d(a)) : d(a).localeCompare(d(b))));
   }
+  return { rows, terms };
+}
+function videoList(fresh) {
+  if (!vlist) return '';
+  const { rows, terms } = videoRows(fresh);
   const box = !fresh && $('#videoCount'); if (box) box.textContent = terms.length ? `${N(rows.length)} من ${N(vlist.rows.length)}` : '';
   return rows.length ? paged(rows, videoCard, 48) : `<div class="empty-note" style="grid-column:1/-1">لا توجد مقاطع تطابق البحث.</div>`;
 }
-function refreshVideos() { const box = $('#videoList'); if (box) box.innerHTML = videoList(); }
+function refreshVideos() { const box = $('#videoList'); if (box) { box.innerHTML = videoList(); markVideo(); } }
 // ---------- lesson tools on a series page: search within it, sort, only what I haven't heard ----------
 let list = null;
 const sortPref = () => { const v = store.get('sort', 'book'); return ['book', 'new', 'old'].includes(v) ? v : 'book'; };
@@ -486,8 +490,8 @@ function viewCat(id, asking) {
   const done = all.filter(l => heard.has(l[0])).length;
   const isVideo = c.v.length || (sec && sec.key === 'videos');
   let body = '';
-  vlist = c.v.length ? { rows: c.v.map((v, i) => [v, i]), dated: c.v.some(v => Array.isArray(v) && v[2]) } : null;
-  if (c.v.length) body += (c.v.length >= 15 ? videoTools() : '') + `<div class="videos" id="videoList">${videoList(true)}</div>`;
+  vlist = c.v.length ? { id: c.id, rows: c.v.map((v, i) => [v, i]), dated: c.v.some(v => Array.isArray(v) && v[2]) } : null;
+  if (c.v.length) body += videoStage(c) + (c.v.length >= 15 ? videoTools() : '') + `<div class="videos" id="videoList">${videoList(true)}</div>`;
   const groups = [];
   if (c.l.length) groups.push([null, c.l]);
   const addKids = (cc, seen = new Set([cc.id])) => cc.kids.forEach(k => { const kc = C[k]; if (!kc || seen.has(k)) return; seen.add(k); if (kc.l.length) groups.push([kc, kc.l]); addKids(kc, seen); });
@@ -512,6 +516,9 @@ function viewCat(id, asking) {
     ${c.x && !c.src ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
     <div class="toolbar">
       ${audioCount ? `<button class="btn primary" type="button" data-playall="c-${c.id}">${I.play} استمع من البداية</button>` : ''}
+      ${c.v.length > 1 ? `<button class="btn primary" type="button" data-vplay="all">${I.play} شاهد المقاطع متتابعة</button>
+        ${vpos[c.id] && c.v.some(v => vidOf(v) === vpos[c.id]) ? `<button class="btn" type="button" data-vplay="cont">تابع من حيث توقفت</button>` : ''}
+        <a class="btn" href="https://www.youtube.com/watch_videos?video_ids=${c.v.slice(0, 50).map(vidOf).map(encodeURIComponent).join(',')}" target="_blank" rel="noopener">${I.ext} ${c.v.length > 50 ? 'أول ٥٠ مقطعاً على يوتيوب' : 'شغّلها على يوتيوب'}</a>` : ''}
       ${audioCount ? `<button class="btn" type="button" data-continue="c-${c.id}">${spos.some(e => e.k === 'c-' + root.id) ? 'تابع من حيث توقفت' : 'تابع أول درس لم تسمعه'}</button>` : ''}
       <button class="btn" type="button" data-save="${c.id}" aria-pressed="${saved.has(c.id)}">${I.bookmark} ${saved.has(c.id) ? 'محفوظ' : 'احفظ'}</button>
       <a class="btn" href="${origCat(c)}" target="_blank" rel="noopener">${I.ext} ${c.src ? 'قناة الجامع على يوتيوب' : 'في الموقع الأصلي'}</a>
@@ -606,7 +613,7 @@ const notFound = () => `<div class="wrap"><div class="empty-note">الصفحة �
 // ---------- router ----------
 let lastQuery = '';
 function route() {
-  pagers = {};
+  pagers = {}; closeVideo();
   const h = current();
   let html, nav = '', title = '';
   if (!h) { html = viewHome(); nav = 'home'; }
@@ -788,6 +795,101 @@ function sleepTick() {
 }
 $('#qSleep').onchange = e => setSleep(e.target.value);
 $('#qMine').onclick = () => { if (cur) setMine(mylist.includes(cur[0]) ? mylist.filter(x => x !== cur[0]) : [...mylist, cur[0]]); };
+
+// ---------- video playlist: YouTube's player in privacy mode, on the series page ----------
+let vheard = new Set(store.get('vheard', [])), vresume = store.get('vresume', {}), vpos = store.get('vpos', {});  // watched ids, id -> seconds, series -> last id
+let yt = null, ytOk = false, ytNext = null, ytApi = null, vq = [], vi = -1, vIv = 0, vErrT = 0;
+function vidOf(v) { return Array.isArray(v) ? v[0] : v; }
+const vtitleOf = (v, i) => (Array.isArray(v) && v[1]) || `مقطع ${N(i + 1)}`;
+function videoStage(c) {
+  return `<div class="vstage" id="vStage" hidden><div class="vframe"><div id="ytp"></div></div>
+    <div class="vbar"><div class="vinfo"><b id="vTitle"></b><span id="vPos" class="num"></span></div>
+    <div class="vbtns"><button class="icon-btn" type="button" id="vPrev" aria-label="المقطع السابق">${I.up.replace('<svg', '<svg style="transform:rotate(90deg)"')}</button>
+    <button class="icon-btn" type="button" id="vNext" aria-label="المقطع التالي">${I.up.replace('<svg', '<svg style="transform:rotate(-90deg)"')}</button>
+    <a class="icon-btn" id="vYt" href="#" target="_blank" rel="noopener" aria-label="افتح المقطع في يوتيوب">${I.ext}</a>
+    <button class="icon-btn" type="button" id="vClose" aria-label="أغلق المشغّل">${I.x}</button></div></div>
+    <div class="verr" id="vErr" role="status" hidden></div></div>`;
+}
+function loadYT() {
+  if (ytApi) return ytApi;
+  ytApi = new Promise((res, rej) => {
+    if (window.YT && YT.Player) return res();
+    window.onYouTubeIframeAPIReady = res;
+    const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; s.onerror = () => { ytApi = null; rej(); };
+    document.head.appendChild(s);
+  });
+  return ytApi;
+}
+function saveVideo() {
+  if (!yt || !ytOk || !yt.getCurrentTime || vi < 0) return;
+  const id = vidOf(vq[vi]), t = yt.getCurrentTime() || 0, d = yt.getDuration() || 0;
+  if (d > 60 && (t >= d * .95 || d - t <= 30)) { vheard.add(id); delete vresume[id]; store.set('vheard', [...vheard]); }
+  else if (t > 5) vresume[id] = t;
+  store.set('vresume', vresume);
+}
+function markVideo() {
+  document.querySelectorAll('.video[data-vid]').forEach(a => {
+    const id = a.dataset.vid; a.classList.toggle('playing', vi >= 0 && vidOf(vq[vi]) === id); a.classList.toggle('watched', vheard.has(id));
+  });
+}
+async function playVideo(i) {
+  const st = $('#vStage'); if (!st || !vq[i]) return;
+  clearTimeout(vErrT); saveVideo();
+  vi = i; const id = vidOf(vq[i]);
+  st.hidden = false; $('#vErr').hidden = true;
+  $('#vTitle').textContent = vtitleOf(vq[i], vlist ? vlist.rows.findIndex(m => vidOf(m[0]) === id) : i);
+  $('#vPos').textContent = vq.length > 1 ? `المقطع ${N(i + 1)} من ${N(vq.length)}` : '';
+  $('#vYt').href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(id);
+  $('#vPrev').disabled = i === 0; $('#vNext').disabled = i >= vq.length - 1;
+  if (vlist) { vpos[vlist.id] = id; store.set('vpos', vpos); }
+  if (!audio.paused) audio.pause();
+  markVideo(); st.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const start = Math.floor(vresume[id] || 0);
+  try { await loadYT(); } catch { return videoError(); }
+  if (!$('#ytp') && !yt) return;  // left the page while the player loaded
+  if (yt && ytOk) yt.loadVideoById({ videoId: id, startSeconds: start });
+  else if (yt) ytNext = { videoId: id, startSeconds: start };  // still starting up: play this one once it is ready
+  else yt = new YT.Player('ytp', { host: 'https://www.youtube-nocookie.com', videoId: id,
+    playerVars: { autoplay: 1, start, rel: 0, playsinline: 1, modestbranding: 1, hl: 'ar' },
+    events: { onReady: () => { ytOk = true; if (ytNext) { yt.loadVideoById(ytNext); ytNext = null; } }, onStateChange: videoState, onError: videoError } });
+}
+function videoState(e) {
+  clearInterval(vIv);
+  if (e.data === 1) { if (!audio.paused) audio.pause(); vIv = setInterval(saveVideo, 5000); }
+  if (e.data === 2) saveVideo();
+  if (e.data === 0) {
+    const id = vidOf(vq[vi]); vheard.add(id); delete vresume[id]; store.set('vheard', [...vheard]); store.set('vresume', vresume); markVideo();
+    if (vi < vq.length - 1) playVideo(vi + 1);
+  }
+}
+function videoError() {  // embedding turned off, removed, or YouTube unreachable: offer it on YouTube and move on
+  const box = $('#vErr'); if (!box) return;
+  const at = vi, more = vi < vq.length - 1;
+  box.hidden = false; box.innerHTML = `تعذّر تشغيل هذا المقطع هنا. <a href="https://www.youtube.com/watch?v=${esc(vidOf(vq[vi]))}" target="_blank" rel="noopener">شاهده على يوتيوب ↗</a>${more ? ' ، وسيبدأ المقطع التالي بعد لحظات.' : ''}`;
+  if (more) vErrT = setTimeout(() => { if (vi === at) playVideo(vi + 1); }, 6000);
+}
+function closeVideo() {
+  clearInterval(vIv); clearTimeout(vErrT); saveVideo();
+  if (yt) { try { yt.destroy(); } catch { } yt = null; } ytOk = false; ytNext = null;
+  vi = -1; const st = $('#vStage'); if (st) { st.hidden = true; st.querySelector('.vframe').innerHTML = '<div id="ytp"></div>'; } markVideo();
+}
+function startVideos(fromId) {
+  const rows = videoRows().rows; vq = rows.map(m => m[0]); if (!vq.length) return;
+  let i = fromId ? vq.findIndex(v => vidOf(v) === fromId) : 0; if (i < 0) i = 0;
+  playVideo(i);
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest('.video[data-vid]');
+  if (a && $('#vStage') && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); startVideos(a.dataset.vid); return; }
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.vplay === 'all') startVideos();
+  else if (b.dataset.vplay === 'cont') { const id = vlist && vpos[vlist.id]; startVideos(id && vheard.has(id) ? (() => { const r = videoRows().rows, k = r.findIndex(m => vidOf(m[0]) === id); return r[k + 1] ? vidOf(r[k + 1][0]) : id; })() : id); }
+  else if (b.id === 'vNext') playVideo(vi + 1);
+  else if (b.id === 'vPrev') playVideo(vi - 1);
+  else if (b.id === 'vClose') closeVideo();
+});
+audio.addEventListener('play', () => { if (yt && yt.pauseVideo) try { yt.pauseVideo(); } catch { } });
+addEventListener('pagehide', saveVideo);
 
 // ---------- events ----------
 document.addEventListener('click', e => {
