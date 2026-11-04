@@ -467,11 +467,62 @@ def years_of(cid):
     if not ys: return ''
     return (ys[0] if ys[0] == ys[-1] else f'{ys[0]}–{ys[-1]}').translate(AR_DIGITS) + 'هـ'
 
+# Sheikh Maher's live lessons from the Rajhi mosque in Makkah (tools/youtube.py, refreshed weekly):
+# one series per book named in the titles, shown first among the videos
+ONES = {'الاول': 1, 'الحادي': 1, 'الواحد': 1, 'الثاني': 2, 'الثالث': 3, 'الرابع': 4, 'الخامس': 5, 'السادس': 6, 'السابع': 7, 'الثامن': 8, 'التاسع': 9, 'العاشر': 10}
+TENS = {'عشر': 10, 'العشرون': 20, 'الثلاثون': 30, 'الاربعون': 40, 'الخمسون': 50, 'الستون': 60, 'السبعون': 70, 'الثمانون': 80, 'التسعون': 90}
+def session_no(label):
+    """«المجلس الثامن والأربعون» → 48, «المجلس 66 والأخير» → 66"""
+    t = norm(label)
+    m = re.search(r'\d+', t)
+    if m: return int(m.group())
+    n = 0
+    for w in re.sub(r'^(المجلس|الدرس)\s*', '', t).replace(' و', ' ').split():
+        n += ONES.get(w, 0) + TENS.get(w, 0) + (TENS.get('ال' + w[2:], 0) if w.startswith('وال') else 0)
+    return n
+YT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'youtube.json')
+if os.path.exists(YT):
+    import hashlib
+    yt = json.load(open(YT, encoding='utf-8'))
+    SESSION = re.compile(r'^(المجلس|الدرس)|^م\s*\d+$|^\d+$|هـ$|ماهر|^(ال)?مرحله')
+    series = collections.OrderedDict()
+    for v in yt['videos']:
+        parts = [p.strip() for p in v['t'].split('|') if p.strip()]
+        book = [p for p in parts if not SESSION.search(norm(p)) and not re.search(r'\d{1,2}\s*-\s*\d{1,2}\s*-\s*14\d\d', p)]
+        sess = [p for p in parts if re.match(r'^(المجلس|الدرس)', p)]
+        k = bnorm(' '.join(book))
+        label = re.sub(r'\s+', ' ', sess[0]).translate(AR_DIGITS) if sess else ' - '.join(b for b in book if not b.startswith('الدورة'))
+        series.setdefault(k, {'name': ' | '.join(book), 'vs': []})['vs'].append([v['id'], label, v['d'], session_no(label) if sess else 0])
+    vsec = next((x for x in sections if x['key'] == 'videos'), None)
+    misc, made = [], []
+    for k, g in series.items():
+        if len(g['vs']) < 2: misc += g['vs']; continue
+        made.append((g['name'], g['vs']))
+    if misc: made.append(('محاضرات ودروس متفرقة', misc))
+    PLACE = 'بجامع الراجحي بمكة'
+    YT_NAMES = {'شرح كتاب التوحيد لمحمد بن عبدالوهاب': 'شرح كتاب التوحيد', 'شرح كتاب مسائل الجاهلية': 'شرح مسائل الجاهلية',
+                'شرح كتاب كشف الشبهات': 'شرح كشف الشبهات', 'منهج الحق | منظومة في العقيدة والأخلاق': 'شرح منظومة منهج الحق'}
+    for name, vs in made:
+        # «الدورة العلمية الموحدة الثانية | شرح كتاب التوحيد» → «شرح كتاب التوحيد (الدورة العلمية الموحدة الثانية)»
+        bits = name.split(' | ')
+        course = [b for b in bits if b.startswith('الدورة')]
+        main = ' | '.join(b for b in bits if not b.startswith('الدورة')) or name
+        title = YT_NAMES.get(main, main).replace(' | ', ' - ')
+        title = f'{title} {PLACE}' + (f' ({course[0]})' if course else '')
+        cid = 9500000 + int(hashlib.sha1(name.encode()).hexdigest()[:6], 16) % 100000
+        vs.sort(key=lambda x: (x[2], x[3], x[0]))  # by date, then the session number in the title
+        vs[:] = [x[:3] for x in vs]
+        out_cats[cid] = {'t': title, 'p': 3, 'up': None, 'kids': [], 'n': len(vs), 'listed': len(vs), 'l': [], 'a': [],
+                         'v': vs, 'x': 1, 'top': 1, 'src': yt['channel'] + '/streams'}
+        if vsec: vsec['series'].insert(len([1 for c in vsec['series'] if out_cats.get(c, {}).get('top')]), cid); vsec['n'] += len(vs)
+    report['youtube'] = {'videos': len(yt['videos']), 'series': [(t, len(v)) for t, v in made], 'review': yt.get('review', [])}
+
 texts = []
 for b in BOOKS['texts']:
     rxs = [loose_re(m) for m in b['match']]
     ids = []
     for s in sections:
+        if s['kind'] == 'videos': continue  # video series keep their own cards
         for cid in s['series']:
             if any(t['ids'] and cid in t['ids'] for t in texts): continue
             if any(rx.search(out_cats[cid]['t']) for rx in rxs) and out_cats[cid]['n']: ids.append(cid)

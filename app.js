@@ -161,7 +161,7 @@ const yearsLabel = c => { const a = hyear(c.r0), b = hyear(c.r1); if (!a) return
 const isPdf = u => /\.pdf$/i.test(u || '');
 
 const crumbsFor = id => { const out = []; let c = C[id], guard = 0; while (c && guard++ < 12) { out.unshift(c); c = C[c.up]; } return out; };
-const origCat = c => c.x ? `${ORIGIN}/page/${c.p}` : `${ORIGIN}/page/${c.p}?category_id=${c.id}`;
+const origCat = c => c.src ? c.src : c.x ? `${ORIGIN}/page/${c.p}` : `${ORIGIN}/page/${c.p}?category_id=${c.id}`;
 const origItem = id => `${ORIGIN}/details/${id}`;
 
 // ---------- rendering helpers ----------
@@ -176,7 +176,7 @@ function bookCard(c, alt) {
       ${yrs ? `<span>${yrs}</span>` : ''}
       ${c.up != null && C[c.up] ? `<span class="pill">ضمن: ${esc(C[crumbsFor(c.id)[0].id].t)}</span>` : sec ? `<span class="pill">${esc(sec.t)}</span>` : ''}
 
-      ${c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب والدورة التي سُجّلت فيها">مجموعة حسب الدورة</span>` : ''}
+      ${c.src ? `<span class="pill">بث مباشر من جامع الراجحي بمكة</span>` : c.x ? `<span class="pill" title="مجموعة حسب اسم الكتاب والدورة التي سُجّلت فيها">مجموعة حسب الدورة</span>` : ''}
     </div></div></a>`;
 }
 // position in the series, and "(2 of 4)" when consecutive lessons share the same title
@@ -205,7 +205,7 @@ function shelfItems(list, key) {
   const out = [], seen = new Set();
   list.forEach(c => {
     const t = textOf[c.id];
-    if (!t) out.push([c.n, bookCard(c)]);
+    if (!t) out.push([c.top ? 1e9 + c.n : c.n, bookCard(c)]);
     else if (!seen.has(t.k)) { seen.add(t.k); out.push([t.n, textCard(t)]); }
   });
   T.forEach(t => { if (key && (t.also || []).includes(key) && !seen.has(t.k)) { seen.add(t.k); out.push([t.n, textCard(t)]); } });  // books of two subjects
@@ -332,7 +332,7 @@ function libraryBody(q) {
 }
 function viewSection(key) {
   const s = secByKey[key]; if (!s) return notFound();
-  const list = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => b.n - a.n);
+  const list = s.series.map(id => C[id]).filter(Boolean).sort((a, b) => (b.top | 0) - (a.top | 0) || b.n - a.n);
   const withLessons = list.filter(c => c.n), empty = list.filter(c => !c.n);
   let body = '';
   if (list.length) body += `<div class="series-list">${shelfItems(withLessons, key)}</div>`;
@@ -432,7 +432,7 @@ function viewCat(id, asking) {
   const done = all.filter(l => heard.has(l[0])).length;
   const isVideo = c.v.length || (sec && sec.key === 'videos');
   let body = '';
-  if (c.v.length) body += `<div class="videos">${c.v.map((v, i) => `<a class="video" href="https://www.youtube.com/watch?v=${esc(v)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(v)}/mqdefault.jpg)">${I.yt}</div><span>مقطع ${N(i + 1)}</span></a>`).join('')}</div>`;
+  if (c.v.length) body += `<div class="videos">${c.v.map((v, i) => { const [vid, vt, vd] = Array.isArray(v) ? v : [v]; return `<a class="video" href="https://www.youtube.com/watch?v=${esc(vid)}" target="_blank" rel="noopener"><div class="th" style="background-image:url(https://i.ytimg.com/vi/${esc(vid)}/mqdefault.jpg)">${I.yt}</div><span>${vt ? esc(vt) : `مقطع ${N(i + 1)}`}</span>${vd ? `<small class="num">${hdate(vd)}</small>` : ''}</a>`; }).join('')}</div>`;
   const groups = [];
   if (c.l.length) groups.push([null, c.l]);
   const addKids = (cc, seen = new Set([cc.id])) => cc.kids.forEach(k => { const kc = C[k]; if (!kc || seen.has(k)) return; seen.add(k); if (kc.l.length) groups.push([kc, kc.l]); addKids(kc, seen); });
@@ -453,12 +453,13 @@ function viewCat(id, asking) {
     ${textOf[root.id] && root.id === c.id ? `<nav class="others" aria-label="شروح أخرى لهذا الكتاب"><span>شروح أخرى لـ«${esc(textOf[root.id].t)}»:</span>${textOf[root.id].ids.filter(i => i !== c.id).map(i => `<a href="#c-${i}">${esc(expLabel(C[i]))}</a>`).join('')}</nav>` : ''}
     <div class="meta"><span class="pill num">${cnt(c.n, isVideo ? 'clip' : 'lesson')}</span>${liveKids(c).length ? `<span class="pill num">${cnt(liveKids(c).length, 'chapter')}</span>` : ''}${yrs ? `<span class="pill">${yrs}</span>` : ''}
       </div>
-    ${c.x ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
+    ${c.src ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">مجالس الشيخ المسجّلة من البث المباشر على قناة جامع الراجحي بمكة في يوتيوب، مرتبة حسب تاريخ البث.</p>` : ''}
+    ${c.x && !c.src ? `<p style="color:var(--muted);max-width:68ch;margin:12px 0 0;font-size:.92rem">دروس منشورة في القائمة العامة لقسم «${esc(secByKey[catSection[c.id]]?.t || '')}»، جُمعت هنا حسب اسم الكتاب والدورة التي سُجّلت فيها لتسهيل متابعتها.</p>` : ''}
     <div class="toolbar">
       ${audioCount ? `<button class="btn primary" type="button" data-playall="c-${c.id}">${I.play} استمع من البداية</button>` : ''}
       ${audioCount ? `<button class="btn" type="button" data-continue="c-${c.id}">تابع أول درس لم تسمعه</button>` : ''}
       <button class="btn" type="button" data-save="${c.id}" aria-pressed="${saved.has(c.id)}">${I.bookmark} ${saved.has(c.id) ? 'محفوظ' : 'احفظ'}</button>
-      <a class="btn" href="${origCat(c)}" target="_blank" rel="noopener">${I.ext} في الموقع الأصلي</a>
+      <a class="btn" href="${origCat(c)}" target="_blank" rel="noopener">${I.ext} ${c.src ? 'قناة الجامع على يوتيوب' : 'في الموقع الأصلي'}</a>
     </div>
     ${audioCount ? `<div class="progress" title="${N(done)} من ${N(audioCount)}"><i style="width:${(done / audioCount * 100).toFixed(1)}%"></i></div><div style="font-size:.8rem;color:var(--muted);margin-top:4px">${N(done)} من ${N(audioCount)} درساً استمعت إليه</div>` : ''}
   </div></div>

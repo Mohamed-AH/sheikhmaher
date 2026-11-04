@@ -202,6 +202,7 @@ section.block { padding-block: 40px 8px; }
 .video .th { aspect-ratio: 16/9; max-width: 100%; background: var(--surface-2) center/cover no-repeat; display: grid; place-items: center; color: var(--brand); }
 .video .th svg { width: 44px; height: 44px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.3)); }
 .video span { display: block; padding: 10px 12px; font-size: .85rem; color: var(--muted); }
+.video small { display: block; padding: 0 12px 10px; margin-top: -6px; font-size: .78rem; color: var(--muted); opacity: .85; }
 
 /* search */
 .results-group { margin-top: 22px; }

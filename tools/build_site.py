@@ -150,7 +150,7 @@ def shelf(ids, key=None):
     for i in ids:
         if not C[i]['n']: continue
         t = TEXT_OF.get(i)
-        if not t: out.append((C[i]['n'], book_card(i)))
+        if not t: out.append(((1e9 if C[i].get('top') else 0) + C[i]['n'], book_card(i)))
         elif t['k'] not in seen: seen.add(t['k']); out.append((t['n'], text_card(t)))
     for t in TEXTS:  # books that belong to two subjects, e.g. بلوغ المرام in الحديث and الفقه
         if key in t.get('also', []) and t['k'] not in seen: seen.add(t['k']); out.append((t['n'], text_card(t)))
@@ -254,7 +254,7 @@ for i, c in C.items():
     parent = f' من «{ch[0][1]["t"]}»' if len(ch) > 1 else ''
     desc = f'«{c["t"]}»{parent}: {cnt(c["n"], unit)} ل{SHEIKH}، للاستماع والتنزيل' + (f'، في {cnt(len(kids), "chapter")}' if kids else '') + '.'
     ld = {'@context': 'https://schema.org', '@type': 'CollectionPage', 'name': c['t'], 'inLanguage': 'ar', 'description': desc,
-          'author': {'@type': 'Person', 'name': 'ماهر بن ظافر القحطاني'}, 'isBasedOn': f'{ORIGIN}/page/{c["p"]}' + ('' if c.get('x') else f'?category_id={i}')}
+          'author': {'@type': 'Person', 'name': 'ماهر بن ظافر القحطاني'}, 'isBasedOn': c.get('src') or (f'{ORIGIN}/page/{c["p"]}' + ('' if c.get('x') else f'?category_id={i}'))}
     page(path, c['t'], desc, body, crumbs=[(n, p) for n, p in cr], noindex=c['n'] == 0, extra_ld=ld)
     if c['n']: sitemap.append((path, .6 if c['up'] is None else .5))
 
