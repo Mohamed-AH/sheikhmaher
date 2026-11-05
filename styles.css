@@ -404,3 +404,40 @@ footer.site a, .lede a, .empty-note a, .page-head p a, .block p a { text-decorat
 .video .seen { position: absolute; bottom: 6px; inset-inline-start: 6px; font-style: normal; font-size: .72rem; background: rgba(0,0,0,.7); color: #fff; padding: 1px 7px; border-radius: 6px; }
 .video.watched span { color: var(--muted); }
 .video.playing { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 12px; }
+
+/* ---------- continue listening: remove, fold, clear ---------- */
+.resume-card { position: relative; grid-template-columns: 44px 1fr 32px; }
+.resume-card .x { width: 32px; height: 32px; margin: -6px -8px 0 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; position: relative; }
+.resume-card .x::before { content: ""; position: absolute; inset: -6px; }  /* a 44px touch area */
+.resume-card .x svg { width: 16px; height: 16px; }
+.resume-card .x:hover { background: var(--surface-2); color: var(--ink); }
+.resume-card.fin .progress i { background: var(--brand); }
+.fin-tag { color: var(--brand); font-weight: 600; }
+.cont-fin { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 14px; margin-bottom: 12px; border-radius: var(--r); background: var(--brand-soft); color: var(--brand); font-size: .9rem; }
+.cont-fold { margin-top: 12px; }
+.cont-fold > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: .9rem; }
+.cont-fold > summary::-webkit-details-marker { display: none; }
+.cont-fold > summary::after { content: "▾"; transition: transform .15s; }
+.cont-fold[open] > summary::after { transform: rotate(180deg); }
+.cont-fold[open] > summary { margin-bottom: 12px; }
+.cont-more { display: none; }
+.cont-foot { margin-top: 12px; }
+.only-narrow { display: none; }
+.btn.danger { border-color: #b4412f; color: #b4412f; }
+.toast { position: fixed; z-index: 40; inset-inline: 16px; bottom: 20px; margin-inline: auto; max-width: 440px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 10px 10px 16px; border-radius: 12px; background: var(--ink); color: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.2); font-size: .9rem; }
+.toast[hidden] { display: none; }
+.toast button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--surface); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+body.has-player .toast { bottom: 126px; }
+@media (max-width: 760px) {
+  .only-wide, .block-head .only-wide { display: none; }
+  .only-narrow { display: block; }
+  .cont-fold > summary { display: flex; justify-content: center; width: 100%; box-sizing: border-box; }
+  /* home: one row to swipe, the next card peeking in */
+  .cont-row { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px; margin-inline: -16px; padding: 2px 16px 6px; scrollbar-width: none; }
+  .cont-row::-webkit-scrollbar { display: none; }
+  .cont-row > * { flex: 0 0 85%; scroll-snap-align: start; }
+  .cont-row > .cont-more { flex: 0 0 34%; display: grid; place-content: center; text-align: center; gap: 4px; border: 1px dashed var(--line); border-radius: var(--r); color: var(--brand); font-size: .9rem; }
+  .toast { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+  body.has-player .toast { bottom: calc(162px + env(safe-area-inset-bottom, 0px)); }
+}

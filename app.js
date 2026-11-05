@@ -290,8 +290,7 @@ function viewHome() {
       <div class="stat"><b class="num">${N(S.filter(s => s.n).length)}</b><span>قسماً علمياً</span></div>
     </div>
   </div></section>
-  ${listening(4) ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع الاستماع</h2><a class="btn" href="#mine">متابعتي</a></div><div class="series-list">${listening(4)}</div></div></section>`
-    : cont.length ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع من حيث توقفت</h2></div><div class="series-list">${cont.map(c => bookCard(c, true)).join('')}</div></div></section>` : ''}
+  ${contHome() || (cont.length ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع من حيث توقفت</h2></div><div class="series-list">${cont.map(c => bookCard(c, true)).join('')}</div></div></section>` : '')}
   <section class="block"><div class="wrap">
     <div class="block-head"><h2>أقسام المكتبة</h2><p>اختر فنّاً لترى كل الكتب المشروحة فيه</p></div>
     <div class="shelf">${S.filter(s => s.n).map(s => `<a class="subject" href="#s-${s.key}"><div class="glyph">${glyph(s.key)}</div><h3>${esc(s.t)}</h3>
@@ -556,30 +555,86 @@ function results(q) {
   return html || `<div class="empty-note">لا نتائج لـ «${esc(q)}». جرّب كلمة أقصر أو بدون ال التعريف.</div>`;
 }
 function viewMine() {
-  const sv = [...saved].map(id => C[id]).filter(Boolean), rc = recent.map(id => C[id]).filter(Boolean);
+  const sv = [...saved].map(id => C[id]).filter(Boolean);
   return `<div class="page-head"><div class="wrap"><div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>متابعتي</span></div><h1 class="kufi">متابعتي</h1>
     <p style="color:var(--muted)">تُحفظ في هذا المتصفح فقط: أين توقفت في كل سلسلة، وقائمتك، والكتب المحفوظة، وآخر ما فتحته، والدروس التي علّمتها مسموعة (${N(heard.size)}).</p></div></div>
     <div class="wrap">
-    ${listening(12) ? `<section class="block"><div class="block-head"><h2>تابع الاستماع</h2></div><div class="series-list">${listening(12)}</div></section>` : ''}
+    ${contMine()}
     <section class="block"><div class="block-head"><h2>قائمتي</h2><div class="toolbar" id="myTools">${myTools()}</div></div>
       <div id="myList">${myListBody()}</div></section>
     <section class="block"><div class="block-head"><h2>الكتب المحفوظة</h2></div>${sv.length ? `<div class="series-list">${sv.map(c => bookCard(c, true)).join('')}</div>` : '<p style="color:var(--muted)">لم تحفظ شيئاً بعد. اضغط «احفظ» في صفحة أي كتاب.</p>'}</section>
-    <section class="block"><div class="block-head"><h2>آخر ما فتحته</h2></div>${rc.length ? `<div class="series-list">${rc.map(c => bookCard(c)).join('')}</div>` : '<p style="color:var(--muted)">لا شيء بعد.</p>'}</section></div>`;
+    ${recentMine()}</div>`;
 }
 // ---------- continue listening: one card per series, where it was left ----------
 const seriesKey = id => { const v = lessonIndex.get(id); return v && v.cat ? 'c-' + crumbsFor(v.cat)[0].id : v && v.sec ? 's-' + v.sec : ''; };
-function listening(max) {
-  return spos.slice(0, max).map(e => {
-    const v = lessonIndex.get(e.id); if (!playable(v && v.l)) return '';
+function contItems() {
+  return spos.map(e => {
+    const v = lessonIndex.get(e.id); if (!playable(v && v.l)) return null;
     const c = e.k.startsWith('c-') ? C[Number(e.k.slice(2))] : null, s = c ? null : secByKey[e.k.slice(2)];
-    if (!c && !s) return '';
-    const all = (c ? collectLessons(c) : s.l).filter(playable), done = all.filter(l => heard.has(l[0])).length, at = resume[e.id];
-    return `<div class="resume-card"><button class="play" type="button" data-resume="${esc(e.k)}" aria-label="تابع الاستماع: ${esc(lessonTitle(v.l[1]))}">${I.play}</button>
-      <div><a class="t" href="#${esc(e.k)}">${esc(c ? c.t : s.t)}</a>
-      <div class="sub"><span>${esc(lessonTitle(v.l[1]))}</span>${at ? `<span class="num">توقفت عند ${fmt(at)}</span>` : ''}</div>
-      <div class="progress" title="${N(done)} من ${N(all.length)}"><i style="width:${all.length ? (done / all.length * 100).toFixed(1) : 0}%"></i></div>
-      <div class="sub num">${N(done)} من ${N(all.length)} درساً</div></div></div>`;
-  }).join('');
+    if (!c && !s) return null;
+    const all = (c ? collectLessons(c) : s.l).filter(playable), done = all.filter(l => heard.has(l[0])).length;
+    return { e, v, t: c ? c.t : s.t, all: all.length, done, fin: all.length > 0 && done >= all.length };
+  }).filter(Boolean);
+}
+function contCard({ e, v, t, all, done, fin }) {
+  const at = resume[e.id];
+  return `<div class="resume-card${fin ? ' fin' : ''}"><button class="play" type="button" data-resume="${esc(e.k)}" aria-label="تابع الاستماع: ${esc(lessonTitle(v.l[1]))}">${I.play}</button>
+    <div><a class="t" href="#${esc(e.k)}">${esc(t)}</a>
+    <div class="sub"><span>${esc(lessonTitle(v.l[1]))}</span>${at && !fin ? `<span class="num">توقفت عند ${fmt(at)}</span>` : ''}</div>
+    <div class="progress" title="${N(done)} من ${N(all)}"><i style="width:${all ? (done / all * 100).toFixed(1) : 0}%"></i></div>
+    <div class="sub num">${fin ? '<b class="fin-tag">أتممتها ✓</b>' : `${N(done)} من ${N(all)} درساً`}</div></div>
+    <button class="x" type="button" data-unresume="${esc(e.k)}" aria-label="أزِل «${esc(t)}» من تابع الاستماع" title="إزالة">${I.x || '✕'}</button></div>`;
+}
+const CONT_SHOW = 4;
+// the home page: the latest few, and a way to all of them
+function contHome() {
+  const it = contItems(); if (!it.length) return '';
+  return `<section class="block" id="contHome"><div class="wrap"><div class="block-head"><h2>تابع الاستماع</h2>
+    <a class="btn" href="#mine">${it.length > CONT_SHOW ? `عرض الكل (${N(it.length)})` : 'متابعتي'}</a></div>
+    <div class="series-list cont-row">${it.slice(0, CONT_SHOW).map(contCard).join('')}${it.length > CONT_SHOW ? `<a class="cont-more" href="#mine">عرض الكل<br><b class="num">${N(it.length)}</b></a>` : ''}</div></div></section>`;
+}
+// «متابعتي»: the latest few, the rest folded; remove one, clear the finished, clear all
+let contOpen = false;
+function contMine() {
+  const it = contItems(); if (!it.length) return '<section class="block" id="contSec" hidden></section>';
+  const fin = it.filter(x => x.fin).length, rest = it.slice(CONT_SHOW);
+  const clear = `<button class="btn" type="button" data-contclear>مسح الكل</button>`;
+  return `<section class="block" id="contSec"><div class="block-head"><h2>تابع الاستماع</h2><div class="toolbar only-wide">${clear}</div></div>
+    ${fin ? `<div class="cont-fin" role="status"><span>${fin === 1 ? 'أتممت سلسلة واحدة' : `أتممت ${N(fin)} سلاسل`}. هل تزيلها من «تابع الاستماع»؟</span><button class="btn" type="button" data-contfin>أزِل ما أتممته</button></div>` : ''}
+    <div class="series-list">${it.slice(0, CONT_SHOW).map(contCard).join('')}</div>
+    ${rest.length ? `<details class="cont-fold"${contOpen ? ' open' : ''}><summary>عرض ${N(rest.length)} أخرى</summary><div class="series-list">${rest.map(contCard).join('')}</div></details>` : ''}
+    <div class="only-narrow cont-foot">${clear}</div></section>`;
+}
+function recentMine() {
+  const rc = recent.map(id => C[id]).filter(Boolean);
+  return `<section class="block" id="recentSec"><div class="block-head"><h2>آخر ما فتحته</h2>${rc.length ? `<div class="toolbar"><button class="btn" type="button" data-recentclear>مسح</button></div>` : ''}</div>
+    ${rc.length ? `<div class="series-list">${rc.map(c => bookCard(c)).join('')}</div>` : '<p style="color:var(--muted)">لا شيء بعد.</p>'}</section>`;
+}
+function refreshCont() {
+  const m = $('#contSec'); if (m) { const d = m.querySelector('.cont-fold'); if (d) contOpen = d.open; m.outerHTML = contMine(); }
+  const r = $('#recentSec'); if (r) r.outerHTML = recentMine();
+  const h = $('#contHome'); if (h) { if (spos.length && contItems().length) h.outerHTML = contHome(); else h.remove(); }
+}
+// a short note at the bottom with a way back
+let toastT = null;
+function toast(msg, undo) {
+  let el = $('#toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+  el.innerHTML = `<span>${esc(msg)}</span>${undo ? '<button type="button" data-undo>تراجع</button>' : ''}`;
+  el.hidden = false; el._undo = undo || null;
+  clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; el._undo = null; }, 5000);
+}
+function setSpos(next, msg) {
+  const before = spos.slice(), rb = recent.slice();
+  spos = next; store.set('spos', spos); refreshCont();
+  toast(msg, () => { spos = before; store.set('spos', spos); recent = rb; store.set('recent', recent); refreshCont(); });
+}
+// a button that asks once more before it clears
+function armed(t) {
+  if (t.dataset.armed) return true;
+  const was = t.textContent; t.dataset.armed = '1'; t.textContent = 'تأكيد المسح؟'; t.classList.add('danger');
+  setTimeout(() => { if (t.isConnected) { delete t.dataset.armed; t.textContent = was; t.classList.remove('danger'); } }, 4000);
+  return false;
 }
 function noteSeries(id) {
   const k = seriesKey(id); if (!k) return;
@@ -904,6 +959,11 @@ document.addEventListener('click', e => {
     if (i < 0) i = Math.max(0, ls.findIndex(l => !heard.has(l[0])));
     setQueue(k, ls, i); load(true); return;
   }
+  if (t.dataset.unresume) { const k = t.dataset.unresume, it = contItems().find(x => x.e.k === k); setSpos(spos.filter(x => x.k !== k), it && it.t.length <= 34 ? `أُزيلت «${it.t}»` : 'أُزيلت من «تابع الاستماع»'); return; }
+  if ('contfin' in t.dataset) { const fin = new Set(contItems().filter(x => x.fin).map(x => x.e.k)); setSpos(spos.filter(x => !fin.has(x.k)), fin.size === 1 ? 'أُزيلت السلسلة التي أتممتها' : `أُزيلت ${N(fin.size)} سلاسل أتممتها`); return; }
+  if ('contclear' in t.dataset) { if (armed(t)) setSpos([], 'مُسحت «تابع الاستماع»'); return; }
+  if ('recentclear' in t.dataset) { if (!armed(t)) return; const rb = recent.slice(); recent = []; store.set('recent', recent); refreshCont(); toast('مُسح «آخر ما فتحته»', () => { recent = rb; store.set('recent', recent); refreshCont(); }); return; }
+  if ('undo' in t.dataset) { const el = $('#toast'), f = el && el._undo; if (el) { el.hidden = true; el._undo = null; } if (f) f(); return; }
   if (t.dataset.resume) {  // a card on the home page: the same lesson and second, in the order it was being played
     const k = t.dataset.resume, e = spos.find(x => x.k === k); if (!e) return;
     const sq = store.get('queue', null);
