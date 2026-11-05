@@ -1,7 +1,7 @@
 {
   "_": "Backup to Cloudflare R2 (tools/r2_backup.py, .github/workflows/backup.yml). public_url: the bucket's custom domain, e.g. https://audio.sheikhmaheralqahtani.com/ — once set, the player falls back to it when an original audio file fails to load. Empty = no fallback.",
   "bucket": "sheikhmaher-audio",
-  "public_url": "",
+  "public_url": "https://audio.sheikhmaheralqahtani.com/",
   "max_gb_per_run": 30,
   "max_minutes_per_run": 300,
   "parallel": 3
