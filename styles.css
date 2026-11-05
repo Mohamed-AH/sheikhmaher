@@ -62,7 +62,7 @@ h1, h2, h3 { text-wrap: balance; margin: 0; }
 .nav { display: flex; gap: 4px; margin-inline-start: auto; }
 .nav a { padding: 6px 12px; border-radius: 999px; color: var(--muted); font-size: .92rem; }
 .nav a:hover, .nav a[aria-current="page"] { background: var(--brand-soft); color: var(--brand); }
-.icon-btn { border: 1px solid var(--line); background: var(--surface); width: 40px; height: 40px; padding: 0; border-radius: 12px; display: grid; place-items: center; cursor: pointer; flex: none; }
+.icon-btn { border: 1px solid var(--line); background: var(--surface); width: 40px; height: 40px; padding: 0; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; flex: none; }
 /* margin:auto as well, because older iPhone Safari ignores place-items inside a button and leaves the icon at the left */
 .icon-btn svg { width: 20px; height: 20px; display: block; margin: auto; }
 @media (max-width: 760px) {
@@ -181,14 +181,14 @@ section.block { padding-block: 40px 8px; }
 .lesson:first-child { border-top: 0; }
 .lesson.playing { background: var(--brand-soft); }
 .lesson.heard .t { color: var(--muted); }
-.play { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); display: grid; place-items: center; cursor: pointer; color: var(--brand); }
+.play { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; color: var(--brand); }
 .play:hover { background: var(--brand); color: var(--surface); border-color: var(--brand); }
 .play svg { width: 16px; height: 16px; }
 .lesson .t { font-size: .97rem; line-height: 1.55; overflow-wrap: anywhere; }
 .lesson .sub { color: var(--muted); font-size: .78rem; display: flex; gap: 10px; flex-wrap: wrap; }
 .lesson .part { color: var(--muted); font-size: .85em; white-space: nowrap; }
 .lesson .acts { display: flex; gap: 4px; }
-.lesson .acts a, .lesson .acts button { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+.lesson .acts a, .lesson .acts button { width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
 .lesson .acts a:hover, .lesson .acts button:hover { background: var(--surface-2); color: var(--ink); }
 .lesson .acts svg { width: 18px; height: 18px; }
 .lesson .acts button[aria-pressed="true"] { color: var(--accent); }
@@ -227,7 +227,7 @@ td .bad { color: var(--warn); }
   padding-bottom: env(safe-area-inset-bottom, 0px); }
 .player .wrap { display: grid; grid-template-columns: auto 1fr auto auto; gap: 14px; align-items: center; padding-block: 10px; }
 .player .ctrl { display: flex; gap: 6px; align-items: center; }
-.player .big { width: 46px; height: 46px; border-radius: 50%; background: var(--brand); color: var(--surface); border: 0; display: grid; place-items: center; cursor: pointer; }
+.player .big { width: 46px; height: 46px; border-radius: 50%; background: var(--brand); color: var(--surface); border: 0; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
 .player .big svg, .player .icon-btn svg { width: 20px; height: 20px; }
 .player .icon-btn { width: 36px; height: 36px; border-radius: 10px; }
 .player .info { min-width: 0; }
@@ -272,7 +272,7 @@ body.has-player { padding-bottom: 110px; }
 body.no-scroll { overflow: hidden; }
 
 @media (max-width: 760px) {
-  .burger { display: grid; }
+  .burger { display: inline-flex; }
   .top .wrap { gap: 10px; }
   .bottom-nav { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; inset: auto 0 0 0; z-index: 26;
     background: var(--surface); border-top: 1px solid var(--line);
@@ -375,7 +375,7 @@ footer.site a, .lede a, .empty-note a, .page-head p a, .block p a { text-decorat
 
 /* continue listening cards, my list */
 .resume-card { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: start; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
-.resume-card .play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--brand); color: var(--surface); display: grid; place-items: center; cursor: pointer; }
+.resume-card .play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--brand); color: var(--surface); display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
 .resume-card .play svg { width: 20px; height: 20px; }
 .resume-card .t { font-family: var(--f-book); font-size: 1.08rem; font-weight: 700; line-height: 1.45; display: block; }
 .resume-card .t:hover { color: var(--brand); }
@@ -404,3 +404,42 @@ footer.site a, .lede a, .empty-note a, .page-head p a, .block p a { text-decorat
 .video .seen { position: absolute; bottom: 6px; inset-inline-start: 6px; font-style: normal; font-size: .72rem; background: rgba(0,0,0,.7); color: #fff; padding: 1px 7px; border-radius: 6px; }
 .video.watched span { color: var(--muted); }
 .video.playing { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 12px; }
+
+/* ---------- continue listening: remove, fold, clear ---------- */
+.resume-card { position: relative; grid-template-columns: 44px 1fr 30px; }
+.resume-card .x { display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 44px; height: 44px; margin: -12px -14px 0 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.resume-card .x svg { width: 16px; height: 16px; }
+@media (hover: hover) { .resume-card .x:hover { background: var(--surface-2); color: var(--ink); } }
+.resume-card.fin .progress i { background: var(--brand); }
+.fin-tag { color: var(--brand); font-weight: 600; }
+.cont-fin { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 14px; margin-bottom: 12px; border-radius: var(--r); background: var(--brand-soft); color: var(--brand); font-size: .9rem; }
+.cont-fold { margin-top: 12px; }
+.cont-fold > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: .9rem; }
+.cont-fold > summary::-webkit-details-marker { display: none; }
+.cont-fold > summary::after { content: "▾"; transition: transform .15s; }
+.cont-fold[open] > summary::after { transform: rotate(180deg); }
+.cont-fold[open] > summary { margin-bottom: 12px; }
+.cont-more { display: none; }
+.cont-foot { margin-top: 12px; }
+.only-narrow { display: none; }
+.btn.danger { border-color: #b4412f; color: #b4412f; }
+.toast { position: fixed; z-index: 40; inset-inline: 16px; bottom: 20px; margin-inline: auto; max-width: 440px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 10px 10px 16px; border-radius: 12px; background: var(--ink); color: var(--surface); box-shadow: 0 8px 24px rgba(0,0,0,.2); font-size: .9rem; }
+.toast[hidden] { display: none; }
+.toast button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--surface); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+body.has-player .toast { bottom: 126px; }
+@media (max-width: 760px) {
+  .only-wide, .block-head .only-wide { display: none; }
+  .only-narrow { display: block; }
+  .cont-fold > summary { display: flex; justify-content: center; width: 100%; box-sizing: border-box; }
+  /* home: one row to swipe, the next card peeking in */
+  .cont-row { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px; margin-inline: -16px; padding: 2px 16px 6px; scrollbar-width: none; }
+  .cont-row::-webkit-scrollbar { display: none; }
+  .cont-row > * { flex: 0 0 85%; scroll-snap-align: start; }
+  .cont-row > .cont-more { flex: 0 0 34%; display: grid; place-content: center; text-align: center; gap: 4px; border: 1px dashed var(--line); border-radius: var(--r); color: var(--brand); font-size: .9rem; }
+  .toast { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+  body.has-player .toast { bottom: calc(162px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* icons inside buttons: a block, so no baseline gap pushes them off centre (older iPhone Safari) */
+.icon-btn svg, .play svg, .lesson .acts svg, .player .big svg, .resume-card button svg { display: block; flex: none; }
