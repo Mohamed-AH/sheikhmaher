@@ -109,8 +109,9 @@ const norm = s => String(s || '').replace(/[ً-ٰٟـ]/g, '').replace(/[إأآٱ
 let C, S, T = [], textByKey = {}, textOf = {}, secByKey = {}, catSection = {}, lessonIndex = new Map(), searchIndex = null;
 const FILES = 'https://maheralqahtani.org/lfm/files/admin/';  // the catalog shortens this common start of audio links to "~"
 const fileUrl = u => u && u[0] === '~' ? FILES + u.slice(1) : u;
+let MIRROR = '';
 function prep(data) {
-  C = data.cats; S = data.sections;
+  C = data.cats; S = data.sections; MIRROR = data.mirror || '';
   S.forEach(s => {
     secByKey[s.key] = s;
     const walk = (id, depth) => { if (catSection[id] || !C[id] || depth > 12) return; catSection[id] = s.key; C[id].kids.forEach(k => walk(k, depth + 1)); };
@@ -683,8 +684,10 @@ function setHeard(id, on) {
   document.querySelectorAll(`.lesson[data-id="${id}"]`).forEach(e => { e.classList.toggle('heard', on); const b = e.querySelector('[data-heard]'); if (b) b.setAttribute('aria-pressed', on); });
   document.querySelectorAll(`#qList [data-qi]`).forEach(b => { if (queue[b.dataset.qi]?.[0] === id) b.classList.toggle('heard', on); });
 }
+let wantPlay = false;
 function load(autoplay) {
   const l = queue[qi]; if (!l) return;
+  wantPlay = !!autoplay;
   savePos();
   cur = l; const v = lessonIndex.get(l[0]);
   player.hidden = false; document.body.classList.add('has-player'); $('#pErr').hidden = true;
@@ -738,8 +741,18 @@ audio.addEventListener('ended', () => {
   if (sleep && sleep.lesson) { setSleep(''); return; }
   if (qi < queue.length - 1) { qi++; load(true); }
 });
-audio.addEventListener('error', () => { if (!cur) return; const e = $('#pErr'); e.hidden = false; e.innerHTML = `تعذّر تشغيل الملف هنا. <a href="${esc(cur[2])}" target="_blank" rel="noopener">افتحه مباشرة ↗</a>`; });
-$('#pPlay').onclick = () => audio.paused ? audio.play().catch(() => { }) : audio.pause();
+// when the original server can't give the file, play our backup copy of it (same path), from the same point
+audio.addEventListener('error', () => {
+  if (!cur) return;
+  if (MIRROR && cur[2].startsWith(ORIGIN) && !audio.src.startsWith(MIRROR)) {
+    const at = audio.currentTime || resume[cur[0]] || 0, go = wantPlay || !audio.paused;
+    audio.src = MIRROR + new URL(cur[2]).pathname.slice(1);
+    audio.addEventListener('loadedmetadata', () => { if (at && at < audio.duration - 30) audio.currentTime = at; }, { once: true });
+    if (go) audio.play().catch(() => { });
+    return;
+  }
+  const e = $('#pErr'); e.hidden = false; e.innerHTML = `تعذّر تشغيل الملف هنا. <a href="${esc(cur[2])}" target="_blank" rel="noopener">افتحه مباشرة ↗</a>`; });
+$('#pPlay').onclick = () => { wantPlay = audio.paused; audio.paused ? audio.play().catch(() => { }) : audio.pause(); };
 $('#pNext').onclick = () => { if (qi < queue.length - 1) { qi++; load(true); } };
 document.querySelectorAll('[data-skip]').forEach(b => b.onclick = () => skip(Number(b.dataset.skip)));
 $('#pPrev').onclick = () => { if (audio.currentTime > 8) audio.currentTime = 0; else if (qi > 0) { qi--; load(true); } };
