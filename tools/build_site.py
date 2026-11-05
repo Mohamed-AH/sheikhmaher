@@ -36,6 +36,11 @@ BEACON = os.environ.get('CF_BEACON_TOKEN', '').strip()
 GSC = os.environ.get('GSC_VERIFICATION', '').strip()  # Google Search Console HTML-tag token
 
 cat = json.load(open(os.path.join(ROOT, 'data', 'catalog.json')))
+# the R2 copy of the audio (tools/backup.json): the player falls back to it when an original file fails
+MIRROR = json.load(open(os.path.join(ROOT, 'tools', 'backup.json'), encoding='utf-8')).get('public_url', '').strip()
+if MIRROR:
+    MIRROR = MIRROR.rstrip('/') + '/'
+    cat['mirror'] = MIRROR
 # the browser gets a compact copy under a name that changes with its content, so it can keep it for good:
 # audio links lose their common start (the app puts it back) and the JSON has no spaces
 FILES = 'https://maheralqahtani.org/lfm/files/admin/'
@@ -97,7 +102,7 @@ main_re = re.compile(r'<main id="app"[^>]*>.*?</main>', re.S)
 CSP = ("default-src 'self'; script-src 'self' https://static.cloudflareinsights.com https://www.youtube.com; "
        "frame-src https://www.youtube-nocookie.com https://www.youtube.com; "
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
-       "img-src 'self' data: https://i.ytimg.com; media-src https://maheralqahtani.org; "
+       "img-src 'self' data: https://i.ytimg.com; media-src https://maheralqahtani.org" + (" " + MIRROR.rstrip("/") if MIRROR else "") + "; "
        "connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'")
 
 def page(path, title, desc, body, crumbs=None, noindex=False, extra_ld=None):

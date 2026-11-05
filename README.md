@@ -70,3 +70,25 @@ One-time setup:
    appeared in GitHub → Actions.
 
 (Or from this folder: `npx wrangler deploy -c worker/wrangler.toml` and `npx wrangler secret put GH_TOKEN -c worker/wrangler.toml`.)
+
+## Backup to Cloudflare R2
+
+`.github/workflows/backup.yml` runs after each nightly refresh (and by hand). `tools/r2_backup.py` copies to the
+bucket every audio file the catalog links to that isn't there yet (newest first, up to 30 GB / 5 hours a night,
+3 at a time, so the first full copy takes a few nights), and a full git bundle of this repo
+(`repo/daily/<date>.bundle`, and `repo/monthly/<yyyy-mm>.bundle` on the 1st). Audio keeps its original path, so
+`https://maheralqahtani.org/lfm/files/x.mp3` is backed up as `lfm/files/x.mp3`. Settings: `tools/backup.json`.
+
+One-time setup:
+1. Cloudflare → R2 → **Create bucket** `sheikhmaher-audio`.
+2. The bucket → Settings → **Custom domains** → connect e.g. `audio.sheikhmaheralqahtani.com`.
+3. The bucket → Settings → **Object lifecycle rules**: delete objects with prefix `repo/daily/` after 30 days,
+   and `repo/monthly/` after 365 days.
+4. R2 → **Manage API tokens** → Create → *Object Read & Write*, only this bucket. Copy the Access Key ID, the
+   Secret Access Key, and your Account ID.
+5. GitHub → the repo → Settings → Secrets and variables → Actions → add `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+   `R2_SECRET_ACCESS_KEY`. Then Actions → **Back up to R2** → Run workflow, to start the first copy.
+6. Put the custom domain in `tools/backup.json` as `public_url` (e.g. `https://audio.sheikhmaheralqahtani.com/`).
+   From then on the player plays the R2 copy whenever an original file fails to load.
+
+To restore the repo: download any bundle and `git clone sheikhmaher.bundle sheikhmaher`.
