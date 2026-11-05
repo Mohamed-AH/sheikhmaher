@@ -50,3 +50,23 @@ Every section and book has its own page (`/book/16/`, `/section/fiqh/`), plus `s
 ## Local preview
 `python3 -I tools/build_site.py --out /tmp/site --base /` then serve `/tmp/site` with any static server.
 Serving the repo folder itself (without the build step) also works, with `#c-16` style links.
+
+## Nightly alarm (Cloudflare Worker)
+
+GitHub's scheduler sometimes skips a night. `worker/nightly.js` runs on a Cloudflare cron at 00:30 UTC and
+asks GitHub to start the refresh workflow (the same as pressing **Run workflow**). GitHub's own schedule
+stays as a backup; the workflow's `concurrency` group queues the runs, and a second run that night finds
+nothing new.
+
+One-time setup:
+1. GitHub → Settings → Developer settings → Fine-grained tokens → **Generate new token**.
+   Repository access: only `Mohamed-AH/sheikhmaher`. Permissions: **Actions: Read and write** (nothing else).
+   Expiration: the longest allowed; note the date to renew it.
+2. Cloudflare → Workers & Pages → **Create** → Worker → name it `sheikhmaher-nightly` → Deploy, then
+   **Edit code**, replace it with `worker/nightly.js`, and Deploy.
+3. The Worker → Settings → Variables and Secrets → **Add** → type Secret, name `GH_TOKEN`, value the token.
+4. The Worker → Settings → Trigger events → **Add** → Cron trigger → `30 0 * * *`.
+5. To test, open the Worker's schedule (cron) tab and run it once, then check that a new run
+   appeared in GitHub → Actions.
+
+(Or from this folder: `npx wrangler deploy -c worker/wrangler.toml` and `npx wrangler secret put GH_TOKEN -c worker/wrangler.toml`.)

@@ -1,0 +1,13 @@
+name = "sheikhmaher-nightly"
+main = "nightly.js"
+compatibility_date = "2026-10-01"
+workers_dev = false   # no web address: it only runs on its schedule
+
+[vars]
+REPO = "Mohamed-AH/sheikhmaher"
+
+[triggers]
+crons = ["30 0 * * *"]   # 00:30 UTC = 03:30 Makkah time, the same hour as GitHub's own schedule
+
+[observability]
+enabled = true
