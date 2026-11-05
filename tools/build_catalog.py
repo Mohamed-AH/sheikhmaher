@@ -576,6 +576,39 @@ if vsec and os.path.exists(VG):
     vsec['groups'] = [g for g in groups if g[1]]
     report['video_groups_unplaced'] = [(c, out_cats[c]['t']) for c in loose]
 
+# ---- manual moves (tools/moves.json): a lesson the original site files in the wrong chapter, put right here.
+# Safe by design: a rule acts only when the lesson is still exactly where it expects it, its title still matches,
+# and both places are in the same book; anything else is left alone and reported, never guessed.
+def _root(cid):
+    seen = set()
+    while out_cats.get(cid, {}).get('up') is not None and cid not in seen: seen.add(cid); cid = out_cats[cid]['up']
+    return cid
+def _chain(cid):
+    out = []
+    while cid is not None and cid in out_cats and cid not in out: out.append(cid); cid = out_cats[cid]['up']
+    return out
+report['moves'] = []
+MV = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'moves.json')
+for m in (json.load(open(MV, encoding='utf-8')).get('moves', []) if os.path.exists(MV) else []):
+    lid, src, dst = m['lesson'], m['from'], m['to']
+    r = {'lesson': lid, 'from': src, 'to': dst}
+    S_, D_ = out_cats.get(src), out_cats.get(dst)
+    hit = next((l for l in S_['l'] if l[0] == lid), None) if S_ else None
+    elsewhere = [c for c, x in out_cats.items() if c != src and any(l[0] == lid for l in x['l'])]
+    if not S_ or not D_: r['status'] = 'skipped: a series id no longer exists'
+    elif hit is None and dst in elsewhere: r['status'] = 'fixed on the original site: this rule can be deleted'
+    elif hit is None: r['status'] = 'skipped: the lesson is no longer there' + (f' (now in {elsewhere})' if elsewhere else ' (removed)')
+    elif m.get('title_has') and m['title_has'] not in hit[1]: r['status'] = 'skipped: the title changed: ' + hit[1]
+    elif _root(src) != _root(dst): r['status'] = 'skipped: the two places are in different books'
+    else:
+        S_['l'] = [l for l in S_['l'] if l[0] != lid]
+        if not any(l[0] == lid for l in D_['l']): D_['l'] = sorted(D_['l'] + [hit], key=lambda l: l[0])
+        for c in _chain(src): out_cats[c]['n'] -= 1
+        for c in _chain(dst): out_cats[c]['n'] += 1
+        r['status'] = 'moved'
+    report['moves'].append(r)
+    print(('moves: ' if r['status'] == 'moved' else '::warning::moves: ') + f"lesson {lid} {src} -> {dst}: {r['status']}")
+
 built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 json.dump({'built': built, 'sections': sections, 'cats': out_cats, 'texts': texts}, open(OUT, 'w'), ensure_ascii=False, separators=(',', ':'))
 report['counts'].sort(key=lambda r: -(r['actual'] - r['site_says']))

@@ -1,0 +1,9 @@
+{
+  "_": "Lessons the original site files in the wrong place, moved on our site until the team fixes them there. Each rule moves one lesson (by its id on the original site) from one series or chapter to another inside the SAME book, and only while the lesson is still where the rule expects it and its title still contains `title_has`. Every night's report (data/report.json → moves) says what happened to each rule; once the original site is fixed, the rule shows as 'fixed on the original site' and can be deleted.",
+  "moves": [
+    {"lesson": 10939, "title_has": "السؤال ٣٤", "from": 636, "to": 705,
+     "why": "سألت أبي: part 1 of question 34 (file أبي 35) sits in the book's main folder; parts 2–3 are in مسائل في القرآن الكريم"},
+    {"lesson": 12980, "title_has": "السؤال ١٠٩", "from": 636, "to": 746,
+     "why": "سألت أبي: question 109 sits in the book's main folder; 108 and 110 are in مسائل في الصلاة"}
+  ]
+}
