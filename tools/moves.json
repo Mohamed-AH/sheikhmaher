@@ -1,9 +1,65 @@
 {
-  "_": "Lessons the original site files in the wrong place, moved on our site until the team fixes them there. Each rule moves one lesson (by its id on the original site) from one series or chapter to another inside the SAME book, and only while the lesson is still where the rule expects it and its title still contains `title_has`. Every night's report (data/report.json → moves) says what happened to each rule; once the original site is fixed, the rule shows as 'fixed on the original site' and can be deleted.",
+  "_": "Lessons the original site files in the wrong place, moved on our site until the team fixes them there. Each rule moves one lesson (by its id on the original site) from one series or chapter to another inside the same book (a move to another book also needs \"cross_book\": true, set on purpose), and only while the lesson is still where the rule expects it and its title still contains `title_has`. Every night's report (data/report.json → moves) says what happened to each rule; once the original site is fixed, the rule shows as 'fixed on the original site' and can be deleted.",
   "moves": [
-    {"lesson": 10939, "title_has": "السؤال ٣٤", "from": 636, "to": 705,
-     "why": "سألت أبي: part 1 of question 34 (file أبي 35) sits in the book's main folder; parts 2–3 are in مسائل في القرآن الكريم"},
-    {"lesson": 12980, "title_has": "السؤال ١٠٩", "from": 636, "to": 746,
-     "why": "سألت أبي: question 109 sits in the book's main folder; 108 and 110 are in مسائل في الصلاة"}
+    {
+      "lesson": 10939,
+      "title_has": "السؤال ٣٤",
+      "from": 636,
+      "to": 705,
+      "why": "سألت أبي: part 1 of question 34 (file أبي 35) sits in the book's main folder; parts 2–3 are in مسائل في القرآن الكريم"
+    },
+    {
+      "lesson": 12980,
+      "title_has": "السؤال ١٠٩",
+      "from": 636,
+      "to": 746,
+      "why": "سألت أبي: question 109 sits in the book's main folder; 108 and 110 are in مسائل في الصلاة"
+    },
+    {
+      "lesson": 7093,
+      "title_has": "باب الفضل والجود",
+      "from": 15,
+      "to": 517,
+      "why": "سنن النسائي: a كتاب الصيام lesson (folder الصيام) sits in the book's main folder"
+    },
+    {
+      "lesson": 22060,
+      "title_has": "باب المجمل والمبين",
+      "from": 466,
+      "to": 475,
+      "why": "نظم العمريطي: sits in the book's main folder; its chapter باب المجمل والمبين is empty"
+    },
+    {
+      "lesson": 15607,
+      "title_has": "صحيح مسلم",
+      "from": 511,
+      "to": 773,
+      "cross_book": true,
+      "why": "a صحيح مسلم lesson on كتاب الكسوف filed under سنن النسائي › كتاب الكسوف"
+    },
+    {
+      "lesson": 20115,
+      "title_has": "مختصر زاد المعاد",
+      "from": 792,
+      "to": 841,
+      "cross_book": true,
+      "why": "مختصر زاد المعاد (file زاد 55, between 54 and 56) filed under الآداب الشرعية"
+    },
+    {
+      "lesson": 8148,
+      "title_has": "نظم العمريطي",
+      "from": 22,
+      "to": 476,
+      "cross_book": true,
+      "why": "نظم العمريطي lines 109–110 (folder باب الأفعال) filed under فوائد قحطانية"
+    },
+    {
+      "lesson": 13413,
+      "title_has": "السؤال ١٢١",
+      "from": 22,
+      "to": 746,
+      "cross_book": true,
+      "why": "سألت أبي question 121 (folder الصلاة) filed under فوائد قحطانية; 120 and 122 are in مسائل في الصلاة"
+    }
   ]
 }

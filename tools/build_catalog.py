@@ -578,7 +578,7 @@ if vsec and os.path.exists(VG):
 
 # ---- manual moves (tools/moves.json): a lesson the original site files in the wrong chapter, put right here.
 # Safe by design: a rule acts only when the lesson is still exactly where it expects it, its title still matches,
-# and both places are in the same book; anything else is left alone and reported, never guessed.
+# and both places are in the same book (or the rule says cross_book: true); anything else is left alone and reported, never guessed.
 def _root(cid):
     seen = set()
     while out_cats.get(cid, {}).get('up') is not None and cid not in seen: seen.add(cid); cid = out_cats[cid]['up']
@@ -599,12 +599,16 @@ for m in (json.load(open(MV, encoding='utf-8')).get('moves', []) if os.path.exis
     elif hit is None and dst in elsewhere: r['status'] = 'fixed on the original site: this rule can be deleted'
     elif hit is None: r['status'] = 'skipped: the lesson is no longer there' + (f' (now in {elsewhere})' if elsewhere else ' (removed)')
     elif m.get('title_has') and m['title_has'] not in hit[1]: r['status'] = 'skipped: the title changed: ' + hit[1]
-    elif _root(src) != _root(dst): r['status'] = 'skipped: the two places are in different books'
+    elif _root(src) != _root(dst) and not m.get('cross_book'): r['status'] = 'skipped: the two places are in different books (set cross_book only if that is meant)'
     else:
         S_['l'] = [l for l in S_['l'] if l[0] != lid]
         if not any(l[0] == lid for l in D_['l']): D_['l'] = sorted(D_['l'] + [hit], key=lambda l: l[0])
         for c in _chain(src): out_cats[c]['n'] -= 1
         for c in _chain(dst): out_cats[c]['n'] += 1
+        if _root(src) != _root(dst):  # another book, maybe another section: keep the section totals right too
+            for sec in sections:
+                if _root(src) in sec.get('series', []): sec['n'] -= 1
+                if _root(dst) in sec.get('series', []): sec['n'] += 1
         r['status'] = 'moved'
     report['moves'].append(r)
     print(('moves: ' if r['status'] == 'moved' else '::warning::moves: ') + f"lesson {lid} {src} -> {dst}: {r['status']}")
