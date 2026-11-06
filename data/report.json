@@ -1133,5 +1133,19 @@
    }
   ]
  },
- "video_groups_unplaced": []
+ "video_groups_unplaced": [],
+ "moves": [
+  {
+   "lesson": 10939,
+   "from": 636,
+   "to": 705,
+   "status": "moved"
+  },
+  {
+   "lesson": 12980,
+   "from": 636,
+   "to": 746,
+   "status": "moved"
+  }
+ ]
 }
