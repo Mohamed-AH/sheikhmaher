@@ -101,7 +101,9 @@ def main():
         more()
         while running:
             f = next(as_completed(running)); u = running.pop(f)
-            try: sent += f.result(); done += 1
+            try:
+                sent += f.result(); done += 1
+                if done % 200 == 0: print(f'backup: {done} copied so far ({sent / 1e9:.1f} GB)', flush=True)
             except Exception as ex:
                 failed += 1
                 if failed <= 20: print('backup: could not copy', u, '-', ex)
