@@ -1,0 +1,38 @@
+name: Back up to R2
+
+# after each nightly refresh (not after every merge), or by hand
+on:
+  workflow_run:
+    workflows: ["Refresh catalog and deploy"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0   # the repo copy carries the whole history
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Copy new audio and a repo snapshot to R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          pip install boto3==1.35.99
+          python3 -I tools/r2_backup.py
