@@ -35,4 +35,4 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           pip install boto3==1.35.99
-          python3 -I tools/r2_backup.py
+          python3 -I -u tools/r2_backup.py   # -u: show progress live in the log
