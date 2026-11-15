@@ -34,6 +34,7 @@ SITE_NAME = 'مكتبة معرفة السنن والآثار للشيخ ماهر
 SHEIKH = 'فضيلة الشيخ ماهر بن ظافر القحطاني حفظه الله'
 BEACON = os.environ.get('CF_BEACON_TOKEN', '').strip()
 GSC = os.environ.get('GSC_VERIFICATION', '').strip()  # Google Search Console HTML-tag token
+YANDEX = '9f5bf363b7b46de6'  # Yandex Webmaster site-verification token (public, home page only)
 
 cat = json.load(open(os.path.join(ROOT, 'data', 'catalog.json')))
 # the R2 copy of the audio (tools/backup.json): the player falls back to it when an original file fails
@@ -123,6 +124,7 @@ def page(path, title, desc, body, crumbs=None, noindex=False, extra_ld=None):
     ]
     if noindex: head.append('<meta name="robots" content="noindex">')
     if GSC and path == '': head.append(f'<meta name="google-site-verification" content="{e(GSC)}">')
+    if path == '': head.append(f'<meta name="yandex-verification" content="{YANDEX}">')
     if url: head.append(f'<link rel="canonical" href="{e(url)}">')
     head += [
         '<meta property="og:type" content="website">', '<meta property="og:locale" content="ar_AR">',
