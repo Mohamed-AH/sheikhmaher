@@ -6,6 +6,7 @@ it reads its public pages, builds a clean catalog, and links/streams the origina
 ## Files
 - `index.html`, `styles.css`, `app.js` — the static site (no build step; host on any static host)
 - `data/catalog.json` — every section, series, chapter and lesson found on the original site
+- `data/schedule.json` — the Sheikh's weekly lesson schedule (shown at `/schedule/` and as «دروس اليوم» on the home page). When the Sheikh publishes a new schedule, edit this file: each day has its four slots (after Fajr, Asr or Jumu'ah, Maghrib, Isha), each book links to its catalog series by id (`c`), and `place` names a mosque from `places` (a slot without one is at the `home` mosque). `"@sun"` repeats Sunday's lesson in that slot
 - `data/report.json` — notes where section counts differ from the lessons in sub-chapters, and which lessons were grouped by title (useful to share privately with the site-team)
 - `tools/crawl.py` — crawls all listing pages (sections, series, sub-chapters, pagination)
 - `tools/prefetch.py` — parallel page fetcher (used for detail pages / speeding up long paginations)
