@@ -218,6 +218,37 @@ sitemap.append(('library/', .8))
 page('start/', 'ابدأ من هنا', f'طريق مقترح لطالب العلم الجديد في دروس {SHEIKH}: متون مختصرة مرتبة من الأيسر إلى الأوسع.',
      '<div class="page-head"><div class="wrap"><h1 class="kufi">طريق مقترح لطالب العلم الجديد</h1></div></div>', crumbs=[('الرئيسية', ''), ('ابدأ من هنا', 'start/')])
 sitemap.append(('start/', .8))
+# weekly lesson schedule (data/schedule.json); the app redraws it with today and the next lesson marked
+SCH = json.load(open(os.path.join(ROOT, 'data', 'schedule.json'), encoding='utf-8'))
+def _sched_html():
+    days = {d['k']: d for d in SCH['days']}
+    P = SCH['places']
+    def slot(s):
+        if isinstance(s, str): s = days[s[1:]]['slots'][k]
+        if 'none' in s: return f'<p class="none">{e(s["none"])}</p>'
+        items = ''.join('<li><span class="bk">' + (f'<span class="pre">{e(it["pre"])}</span> ' if it.get('pre') else '') + f'<b>{e(it["t"])}</b>'
+                        + (f' <span class="by">{e(it["by"])}</span>' if it.get('by') else '')
+                        + (f' <a href="book/{it["c"]}/">الدروس المسجلة</a>' if it.get('c') in C else '') + '</span></li>' for it in s['items'])
+        pl = P[s.get('place') or SCH['home']]
+        return ((f'<p class="intro">{e(s["intro"])}:</p>' if s.get('intro') else '') + f'<ul class="books">{items}</ul>'
+                + (f'<p class="then">{e(s["then"])}</p>' if s.get('then') else '')
+                + '<div class="tags">' + (f'<span class="tag note">{e(s["note"])}</span>' if s.get('note') else '')
+                + f'<span class="tag place">{e(pl["t"])} {e(pl["area"])} · {e(pl["city"])}</span></div>')
+    out = []
+    for d in SCH['days']:
+        cards = []
+        for k in ['fajr', 'asr', 'jumuah', 'maghrib', 'isha']:
+            if k in d['slots']: cards.append(f'<article class="slot"><header><h3>{e(SCH["slots"][k])}</h3></header>{slot(d["slots"][k])}</article>')
+        out.append(f'<section class="block"><h2>{e(d["t"])}</h2><div class="day">' + ''.join(cards) + '</div></section>')
+    return out
+home_place = SCH['places'][SCH['home']]
+page('schedule/', 'جدول الدروس الأسبوعي', f'جدول دروس {SHEIKH} الأسبوعية من السبت إلى الجمعة: بعد الفجر والعصر والمغرب والعشاء، مع أماكنها وروابط الدروس المسجلة.',
+     '<div class="page-head sched-head"><div class="wrap"><h1 class="kufi">جدول الدروس الأسبوعي</h1>'
+     f'<p class="byline">تقام في <b>{e(home_place["t"])}</b> {e(home_place["area"])} ({e(home_place["city"])}) ما لم يُذكر مسجد آخر.</p></div></div>'
+     '<div class="wrap sched">' + ''.join(_sched_html())
+     + f'<section class="monthly"><div><h2>الدرس الشهري</h2><p>{e(SCH["monthly"]["t"])} ب{e(SCH["places"][SCH["monthly"]["place"]]["t"])}.</p></div></section></div>',
+     crumbs=[('الرئيسية', ''), ('جدول الدروس', 'schedule/')])
+sitemap.append(('schedule/', .9))
 page('mine/', 'متابعتي', 'الكتب المحفوظة وآخر ما استمعت إليه.', '<div class="page-head"><div class="wrap"><h1 class="kufi">متابعتي</h1></div></div>', noindex=True)
 page('search/', 'البحث', 'ابحث في عناوين الكتب والدروس.', '<div class="page-head"><div class="wrap"><h1 class="kufi">البحث في المكتبة</h1></div></div>', noindex=True)
 
@@ -301,6 +332,8 @@ open(os.path.join(OUT, '_headers'), 'w').write(f"""/*
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
 {'  X-Robots-Tag: noindex' + chr(10) if os.environ.get('CF_PAGES_URL') and os.environ.get('CF_PAGES_BRANCH') != 'main' else ''}  X-Frame-Options: DENY
 /data/catalog.json
+  Cache-Control: public, max-age=0, must-revalidate
+/data/schedule.json
   Cache-Control: public, max-age=0, must-revalidate
 /data/c.*
   Cache-Control: public, max-age=31536000, immutable

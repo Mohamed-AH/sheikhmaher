@@ -291,6 +291,7 @@ function viewHome() {
       <div class="stat"><b class="num">${N(S.filter(s => s.n).length)}</b><span>قسماً علمياً</span></div>
     </div>
   </div></section>
+  <div id="todayBlock">${todayBlock()}</div>
   ${contHome() || (cont.length ? `<section class="block"><div class="wrap"><div class="block-head"><h2>تابع من حيث توقفت</h2></div><div class="series-list">${cont.map(c => bookCard(c, true)).join('')}</div></div></section>` : '')}
   <section class="block"><div class="wrap">
     <div class="block-head"><h2>أقسام المكتبة</h2><p>اختر فنّاً لترى كل الكتب المشروحة فيه</p></div>
@@ -666,6 +667,211 @@ function setMine(next) {
 }
 const notFound = () => `<div class="wrap"><div class="empty-note">الصفحة غير موجودة. <a href="#" style="color:var(--brand)">العودة للرئيسية</a></div></div>`;
 
+// ---------- weekly schedule (data/schedule.json) ----------
+// Times are worked out in Saudi time (UTC+3) for the city of each lesson, with the Umm al-Qura rules
+// (Fajr at 18.5°, Asr by the shadow ratio 1, Isha 90 minutes after Maghrib, 120 in Ramadan). They only
+// mark which lesson is on now or next and give an approximate adhan time; the schedule names no clock times.
+let SCHED = null;
+const CITY_POS = { 'جدة': [21.543, 39.173], 'مكة': [21.4225, 39.8262], 'الطائف': [21.27, 40.415], 'المدينة النبوية': [24.467, 39.611] };
+const SLOT_ORDER = ['fajr', 'asr', 'jumuah', 'maghrib', 'isha'];
+const DAY_SHORT = { Sat: 6, Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
+const nf2 = new Intl.NumberFormat('ar-SA', { minimumIntegerDigits: 2 });
+function prepSchedule(d) {
+  const byKey = {};
+  d.days.forEach(day => { byKey[day.k] = day; });
+  d.days.forEach(day => { for (const k in day.slots) { const v = day.slots[k]; if (typeof v === 'string' && v[0] === '@') day.slots[k] = byKey[v.slice(1)].slots[k]; } });
+  d.days.forEach(day => { day.order = SLOT_ORDER.filter(k => day.slots[k]); });
+  return d;
+}
+function saudiNow() {
+  const p = {}; new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Riyadh', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: 'h23', weekday: 'short' })
+    .formatToParts(new Date()).forEach(x => { p[x.type] = x.value; });
+  return { y: +p.year, m: +p.month, d: +p.day, dow: DAY_SHORT[p.weekday], min: (+p.hour % 24) * 60 + +p.minute };
+}
+const addDays = (n, k) => { const t = new Date(Date.UTC(n.y, n.m - 1, n.d + k)); return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() }; };
+function ramadan({ y, m, d }) {
+  try { return new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', { month: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d, 12))) === '9'; } catch { return false; }
+}
+// adhan times in minutes after midnight, Saudi time
+function prayerTimes(date, city) {
+  const [lat, lng] = CITY_POS[city] || CITY_POS['جدة'];
+  const r = Math.PI / 180, sin = x => Math.sin(x * r), cos = x => Math.cos(x * r), fix = (a, b) => ((a % b) + b) % b;
+  const D = Date.UTC(date.y, date.m - 1, date.d, 12) / 864e5 + 2440587.5 - lng / 360 - 2451545;
+  const g = fix(357.529 + 0.98560028 * D, 360), q = fix(280.459 + 0.98564736 * D, 360);
+  const L = fix(q + 1.915 * sin(g) + 0.020 * sin(2 * g), 360), e = 23.439 - 0.00000036 * D;
+  const RA = fix(Math.atan2(cos(e) * sin(L), cos(L)) / r / 15, 24), decl = Math.asin(sin(e) * sin(L)) / r;
+  let eqt = q / 15 - RA; eqt = eqt > 12 ? eqt - 24 : eqt < -12 ? eqt + 24 : eqt;
+  const noon = 12 + 3 - lng / 15 - eqt;
+  const T = alt => Math.acos((sin(alt) - sin(decl) * sin(lat)) / (cos(decl) * cos(lat))) / r / 15;
+  const asrAlt = Math.atan(1 / (1 + Math.tan(Math.abs(lat - decl) * r))) / r;
+  const maghrib = noon + T(-0.833);
+  const h = { fajr: noon - T(-18.5), jumuah: noon, asr: noon + T(asrAlt), maghrib, isha: maghrib + (ramadan(date) ? 2 : 1.5) };
+  for (const k in h) h[k] = Math.round(h[k] * 60);
+  return h;
+}
+const clock = m => { const h = Math.floor(m / 60) % 24, mm = m % 60; return `${N(h % 12 || 12)}:${nf2.format(mm)} ${h < 12 ? 'ص' : 'م'}`; };
+const placeOf = s => SCHED.places[(s && s.place) || SCHED.home];
+const slotTime = (day, k, date) => prayerTimes(date, placeOf(day.slots[k]).city)[k];
+const hasLesson = s => s && !s.none;
+// what is on now, and the next lesson, in Saudi time
+function schedStatus() {
+  const now = saudiNow(); let cur = null, next = null;
+  for (let off = 0; off < 8 && !next; off++) {
+    const dow = (now.dow + off) % 7, day = SCHED.days.find(x => x.dow === dow), date = addDays(now, off);
+    const ks = day.order.filter(k => hasLesson(day.slots[k]));
+    for (let i = 0; i < ks.length; i++) {
+      const t = slotTime(day, ks[i], date);
+      if (off === 0 && t <= now.min) {
+        const after = day.order.indexOf(ks[i]) + 1 < day.order.length ? slotTime(day, day.order[day.order.indexOf(ks[i]) + 1], date) : 24 * 60;
+        if (now.min < Math.min(t + 90, after)) cur = { day, k: ks[i], t, off };
+        continue;
+      }
+      next = { day, k: ks[i], t, off }; break;
+    }
+  }
+  return { now, cur, next };
+}
+const whenWord = (off, day) => off === 0 ? 'اليوم' : off === 1 ? 'غداً' : 'يوم ' + day.t;
+function bookItem(it, plain) {
+  const c = it.c != null && C[it.c];
+  const head = `${it.pre ? `<span class="pre">${esc(it.pre)}</span> ` : ''}<b>${esc(it.t)}</b>${it.by ? ` <span class="by">${esc(it.by)}</span>` : ''}`;
+  if (!c || plain) return `<li><span class="bk">${head}</span></li>`;
+  return `<li><a class="bk" href="#c-${c.id}">${head}<span class="rec num">${I.play}<span>${cnt(c.n, 'lesson')} مسجلة</span></span></a></li>`;
+}
+function placeTag(s) {
+  const p = placeOf(s), home = !s.place || s.place === SCHED.home;
+  return `<span class="tag place${home ? ' home' : ''}" data-city="${esc(p.city)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(p.t)}${p.area ? ' ' + esc(p.area) : ''}${p.city ? ` <i>· ${esc(p.city)}</i>` : ''}</span>`;
+}
+function repeatSpan(k, day) {  // the run of days around this one with the same lesson in this slot
+  const ds = SCHED.days, i = ds.indexOf(day), s = day.slots[k]; let a = i, b = i;
+  while (a > 0 && ds[a - 1].slots[k] === s) a--;
+  while (b < ds.length - 1 && ds[b + 1].slots[k] === s) b++;
+  return [a, b];
+}
+function slotBody(day, k, plain) {
+  const s = day.slots[k];
+  if (!hasLesson(s)) return `<p class="none">${esc(s.none)}</p>`;
+  const [a, b] = repeatSpan(k, day);
+  return `${s.intro ? `<p class="intro">${esc(s.intro)}:</p>` : ''}
+    <ul class="books${s.items.length > 3 ? ' many' : ''}">${s.items.map(it => bookItem(it, plain)).join('')}</ul>
+    ${s.then ? `<p class="then">${esc(s.then)}</p>` : ''}
+    <div class="tags">${s.note ? `<span class="tag note">${esc(s.note)}</span>` : ''}${placeTag(s)}${b > a ? `<span class="tag rep">كل يوم من ${SCHED.days[a].t} إلى ${SCHED.days[b].t}</span>` : ''}</div>`;
+}
+function slotCard(day, k, date) {
+  const s = day.slots[k];
+  return `<article class="slot${hasLesson(s) ? '' : ' empty'}" data-day="${day.k}" data-slot="${k}">
+    <header><h3>${SCHED.slots[k]}</h3><span class="badge" aria-hidden="true"></span>${hasLesson(s) ? `<span class="adhan num" title="وقت الأذان تقريباً بتوقيت السعودية">الأذان نحو ${clock(slotTime(day, k, date))}</span>` : ''}</header>
+    ${slotBody(day, k)}</article>`;
+}
+function nowCard(st) {
+  const one = (x, lead) => {
+    const s = x.day.slots[x.k], p = placeOf(s);
+    return `<div class="nc"><span class="lead">${lead}</span>
+      <div class="nc-title">${s.items.map(it => esc(it.t)).join(' · ')}</div>
+      <div class="nc-meta">${esc(SCHED.slots[x.k])} ${whenWord(x.off, x.day)} · الأذان نحو <span class="num">${clock(x.t)}</span> · ${esc(p.t)}${p.city ? '، ' + esc(p.city) : ''}</div></div>`;
+  };
+  return (st.cur ? one(st.cur, 'في هذا الوقت') : '') + (st.next ? one(st.next, st.cur ? 'بعده' : 'الدرس القادم') : '');
+}
+function weekGrid(st) {
+  const ds = SCHED.days, rows = [['fajr'], ['asr', 'jumuah'], ['maghrib'], ['isha']];
+  let h = `<div class="wk-h corner"></div>` + ds.map((d, i) => `<div class="wk-h day" data-dow="${d.dow}" style="grid-column:${i + 2}">${d.t}</div>`).join('');
+  h += ds.map((d, i) => `<div class="wk-col" data-dow="${d.dow}" style="grid-column:${i + 2}" aria-hidden="true"></div>`).join('');
+  rows.forEach((ks, r) => {
+    h += `<div class="wk-h slotname" style="grid-row:${r + 2}">${SCHED.slots[ks[0]]}</div>`;
+    for (let i = 0; i < ds.length;) {
+      const d = ds[i], k = ks.find(x => d.slots[x]), s = d.slots[k]; let j = i;
+      while (j + 1 < ds.length && ds[j + 1].slots[k] === s) j++;
+      h += `<div class="wk-cell slot${hasLesson(s) ? '' : ' empty'}${j > i ? ' span' : ''}" data-day="${ds.slice(i, j + 1).map(x => x.k).join(' ')}" data-slot="${k}" style="grid-row:${r + 2};grid-column:${i + 2}/${j + 3}">
+        ${k !== ks[0] ? `<div class="own">${SCHED.slots[k]}</div>` : ''}<span class="badge" aria-hidden="true"></span>${slotBody(d, k)}</div>`;
+      i = j + 1;
+    }
+  });
+  return `<div class="week" role="table" aria-label="جدول الأسبوع">${h}</div>`;
+}
+function viewSchedule() {
+  if (!SCHED) return `<div class="wrap"><div class="empty-note">${schedFailed ? 'تعذّر تحميل الجدول. حدّث الصفحة.' : 'جارٍ تحميل الجدول…'}</div></div>`;
+  const st = schedStatus(), home = SCHED.places[SCHED.home];
+  const order = SCHED.days, today = order.findIndex(d => d.dow === st.now.dow);
+  const offOf = d => (d.dow - st.now.dow + 7) % 7;
+  const used = {}; order.forEach(d => d.order.forEach(k => { const s = d.slots[k]; if (hasLesson(s)) (used[s.place || SCHED.home] ||= new Set()).add(d.t); }));
+  (used[SCHED.monthly.place] ||= new Set()).add('درس شهري');
+  const mc = C[SCHED.monthly.c], mp = SCHED.places[SCHED.monthly.place];
+  return `<div class="page-head sched-head"><div class="wrap">
+    <div class="crumbs"><a href="#">الرئيسية</a><span aria-hidden="true">/</span><span>جدول الدروس</span></div>
+    <h1 class="kufi">جدول الدروس الأسبوعي</h1>
+    <p class="byline">دروس فضيلة الشيخ ماهر بن ظافر القحطاني حفظه الله. تقام في <b>${esc(home.t)}</b> ${esc(home.area)} (${esc(home.city)}) ما لم يُذكر مسجد آخر.</p>
+    <div class="now-card" id="schedNow" aria-live="polite">${nowCard(st)}</div>
+  </div></div>
+  <div class="wrap sched">
+    <div class="sched-bar">
+      <div class="day-tabs" role="tablist" aria-label="أيام الأسبوع">${order.map((d, i) => `<button type="button" role="tab" id="tab-${d.k}" aria-controls="day-${d.k}" aria-selected="${i === today}" tabindex="${i === today ? 0 : -1}" data-daytab="${i}" data-dow="${d.dow}">${d.t}<small>${offOf(d) === 0 ? 'اليوم' : offOf(d) === 1 ? 'غداً' : '&nbsp;'}</small></button>`).join('')}</div>
+    </div>
+    <div class="days" id="days">${order.map(d => {
+      const date = addDays(st.now, offOf(d));
+      return `<section class="day" id="day-${d.k}" role="tabpanel" aria-labelledby="tab-${d.k}" data-dow="${d.dow}"><h2 class="sr-only">${d.t}</h2>${d.order.map(k => slotCard(d, k, date)).join('')}</section>`;
+    }).join('')}</div>
+    ${weekGrid(st)}
+    <section class="monthly"><div class="glyph">${glyph('aqeedah')}</div><div>
+      <h2>الدرس الشهري</h2><p>${esc(SCHED.monthly.t)} <b>ب${esc(mp.t)}</b>.</p>
+      ${mc ? `<a class="btn" href="#c-${mc.id}">استمع لدروسه المسجلة (${cnt(mc.n, 'lesson')})</a>` : ''}</div></section>
+    <section class="places"><h2>أماكن الدروس</h2><div class="place-list">${Object.entries(used).map(([k, days]) => { const p = SCHED.places[k];
+      return `<a class="place-card" data-city="${esc(p.city)}" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([p.t, p.area.replace(/^بحي /, 'حي '), p.city].filter(Boolean).join(' '))}" target="_blank" rel="noopener">
+        <b>${esc(p.t)}</b><span>${esc([p.area, p.city].filter(Boolean).join('، '))}</span><small>${[...days].join('، ')}</small><i aria-hidden="true">${I.ext}</i></a>`; }).join('')}</div>
+      <p class="fine">أوقات الأذان المذكورة تقريبية بتوقيت السعودية (تقويم أم القرى) وتختلف دقائق من مسجد لآخر. الجدول منقول من الإعلان الرسمي لدروس الشيخ.</p></section>
+  </div>`;
+}
+let schedFailed = false;
+// today's lessons on the home page
+function todayBlock() {
+  if (!SCHED) return '';
+  const st = schedStatus(), day = SCHED.days.find(d => d.dow === st.now.dow), date = addDays(st.now, 0);
+  return `<section class="block today"><div class="wrap">
+    <div class="block-head"><h2>دروس اليوم <span class="muted">· ${day.t}</span></h2><a class="btn" href="#schedule">الجدول الأسبوعي كاملاً</a></div>
+    <div class="today-list">${day.order.map(k => { const s = day.slots[k]; return `<div class="slot mini${hasLesson(s) ? '' : ' empty'}" data-day="${day.k}" data-slot="${k}">
+      <div class="mini-h"><b>${SCHED.slots[k]}</b><span class="badge" aria-hidden="true"></span>${hasLesson(s) ? `<span class="adhan num">${clock(slotTime(day, k, date))}</span>` : ''}</div>
+      ${hasLesson(s) ? `<ul class="books">${s.items.map(it => bookItem(it)).join('')}</ul><div class="tags">${s.note ? `<span class="tag note">${esc(s.note)}</span>` : ''}${placeTag(s)}</div>` : `<p class="none">${esc(s.none)}</p>`}</div>`; }).join('')}</div>
+  </div></section>`;
+}
+// mark the lesson on now / next, and today's column; runs after each render and every minute
+function markSchedule() {
+  if (!SCHED) return;
+  const st = schedStatus();
+  const nc = $('#schedNow'); if (nc) nc.innerHTML = nowCard(st);
+  document.querySelectorAll('.slot[data-slot]').forEach(el => {
+    const days = el.dataset.day.split(' '), hit = x => x && days.includes(x.day.k) && x.k === el.dataset.slot && x.off === 0;
+    const isNow = hit(st.cur), isNext = !isNow && st.next && days.includes(st.next.day.k) && st.next.k === el.dataset.slot && (st.next.off === 0 || el.closest('.day,.week'));
+    el.classList.toggle('now', isNow); el.classList.toggle('next', !!isNext && !(el.closest('.week') && st.next.off >= 7));
+    const b = el.querySelector('.badge'); if (b) b.textContent = isNow ? 'الآن' : isNext ? (st.next.off === 0 ? 'التالي' : st.next.off === 1 ? 'التالي · غداً' : 'التالي') : '';
+  });
+  document.querySelectorAll('[data-dow]').forEach(el => el.classList.toggle('is-today', Number(el.dataset.dow) === st.now.dow));
+}
+setInterval(markSchedule, 60000);
+function setDay(i, smooth, fromScroll) {
+  const box = $('#days'), tl = $('.day-tabs'); if (!box || !tl) return;
+  const tabs = [...tl.children], panel = box.children[i], b = smooth ? 'smooth' : 'auto';
+  if (!panel) return;
+  tabs.forEach((t, j) => { t.setAttribute('aria-selected', j === i); t.tabIndex = j === i ? 0 : -1; });
+  // right-to-left scrollers count from 0 at the start (right) edge and go negative
+  const t = tabs[i]; tl.scrollTo({ left: t.offsetLeft - tabs[0].offsetLeft + t.offsetWidth / 2 + tl.clientWidth / 2 - tabs[0].offsetWidth, behavior: b });
+  if (!fromScroll) box.scrollTo({ left: panel.offsetLeft - box.children[0].offsetLeft, behavior: b });
+  dayShown = i;
+}
+let dayShown = -1, dayRaf = 0;
+function wireSchedule() {
+  const box = $('#days'); if (!box) return;
+  const tl = $('.day-tabs'), today = [...tl.children].findIndex(t => t.getAttribute('aria-selected') === 'true');
+  setDay(today < 0 ? 0 : today, false);
+  box.addEventListener('scroll', () => {
+    cancelAnimationFrame(dayRaf);
+    dayRaf = requestAnimationFrame(() => { const w = box.children[0].offsetWidth || 1, i = Math.round(Math.abs(box.scrollLeft) / (w + (box.children[1].offsetLeft ? Math.abs(box.children[1].offsetLeft - box.children[0].offsetLeft) - w : 0))); if (i !== dayShown) setDay(i, true, true); });
+  }, { passive: true });
+  tl.addEventListener('click', e => { const t = e.target.closest('[data-daytab]'); if (t) setDay(Number(t.dataset.daytab), true); });
+  tl.addEventListener('keydown', e => {
+    const n = tl.children.length, d = { ArrowLeft: 1, ArrowRight: -1, Home: -99, End: 99 }[e.key]; if (d == null) return;
+    e.preventDefault(); const i = Math.max(0, Math.min(n - 1, dayShown + d)); setDay(i, true); tl.children[i].focus();
+  });
+}
+
 // ---------- router ----------
 let lastQuery = '';
 function route() {
@@ -676,6 +882,7 @@ function route() {
   else if (h === 'start') { html = viewStart(); nav = 'start'; }
   else if (h === 'library') { html = viewLibrary(); nav = 'library'; }
   else if (h === 'mine') { html = viewMine(); nav = 'mine'; }
+  else if (h === 'schedule') { html = viewSchedule(); nav = 'schedule'; }
 
   else if (h === 'search') {
     if (PATH_MODE && !lastQuery) lastQuery = new URLSearchParams(location.search).get('q') || '';
@@ -685,12 +892,14 @@ function route() {
   else if (h.startsWith('t-')) { html = viewText(h.slice(2)); nav = 'library'; title = textByKey[h.slice(2)]?.t; }
   else if (h.startsWith('c-')) { html = viewCat(Number(h.slice(2))); nav = 'library'; title = C[Number(h.slice(2))]?.t; }
   else html = notFound();
-  if (!title) title = { start: 'ابدأ من هنا', library: 'المكتبة', mine: 'متابعتي' }[h] || '';
+  if (!title) title = { start: 'ابدأ من هنا', library: 'المكتبة', mine: 'متابعتي', schedule: 'جدول الدروس الأسبوعي' }[h] || '';
   document.title = (title ? title + ' | ' : '') + SITE_NAME;
   app.innerHTML = html;
   fixLinks(app);
   document.querySelectorAll('[data-nav]').forEach(a => a.dataset.nav === nav ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   markPlaying();
+  markSchedule();
+  if (h === 'schedule') wireSchedule();
   if (h === 'search') { const i = $('#q2'); i && (i.focus(), i.setSelectionRange(i.value.length, i.value.length)); }
   else {
     window.scrollTo(0, 0);
@@ -1073,12 +1282,19 @@ if (PATH_MODE) {
   });
   // old #c-16 style links still work
   const legacy = location.hash.slice(1);
-  if (/^(c-\d+|[st]-[\w-]+|start|library|mine|search)$/.test(legacy)) history.replaceState(null, '', L(legacy));
+  if (/^(c-\d+|[st]-[\w-]+|start|library|mine|search|schedule)$/.test(legacy)) history.replaceState(null, '', L(legacy));
 } else window.addEventListener('hashchange', route);
 
 // ---------- boot ----------
+const schedP = fetch('data/schedule.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(prepSchedule);
+schedP.then(d => { SCHED = d; }, () => { schedFailed = true; });
 function boot(data) {
   prep(data);
+  schedP.finally(() => {
+    const h = current();
+    if (h === 'schedule' && !$('.sched')) route();
+    else if (!h) { const b = $('#todayBlock'); if (b && !b.innerHTML.trim()) { b.innerHTML = todayBlock(); fixLinks(b); markSchedule(); } }
+  }).catch(() => { });
   $('#drawerSections').innerHTML = S.filter(s => s.n).map(s => `<a href="#s-${s.key}"><span>${esc(s.t)}</span><span class="num">${N(s.n)}</span></a>`).join('');
   fixLinks(document);
   if (data.built) $('#built').textContent = 'آخر تحديث للفهرس: ' + new Date(data.built).toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: 'long', day: 'numeric' });

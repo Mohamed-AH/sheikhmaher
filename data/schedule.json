@@ -1,0 +1,76 @@
+{
+  "_note": "The Sheikh's weekly lesson schedule, transcribed from the schedule image (received 2026-11-23). Days run Saturday to Friday as on the image. Each slot is 'fajr', 'asr' (Friday: 'jumuah'), 'maghrib', 'isha'. A slot is either {\"none\": text} or {\"intro\", \"items\", \"then\", \"note\", \"place\"}. Each item has the book title 't', an optional lead word 'pre' (شرح / شرح كتاب), the author 'by', and 'c', the catalog series id with the Sheikh's recorded lessons of that book (null when the catalog has none). 'place' is a key of 'places'; a slot without one is at the 'home' mosque. To update: edit this file; the site and the schedule page are rebuilt from it.",
+  "home": "bilal",
+  "places": {
+    "bilal": { "t": "مسجد بلال بن رباح", "area": "بحي مشرفة، شارع اللياقة", "city": "جدة" },
+    "rajhi": { "t": "جامع عائشة الراجحي", "area": "", "city": "مكة" },
+    "khadija": { "t": "مسجد خديجة بغلف", "area": "بحي النسيم", "city": "جدة" },
+    "saud": { "t": "جامع الملك سعود", "area": "بحي الشرفية", "city": "جدة" },
+    "fahd": { "t": "جامع الملك فهد", "area": "بحي الشرفية", "city": "جدة" },
+    "fahd-taif": { "t": "جامع الملك فهد", "area": "", "city": "الطائف" },
+    "hijra": { "t": "مسجد دار الهجرة", "area": "", "city": "المدينة النبوية" }
+  },
+  "slots": { "fajr": "بعد الفجر", "asr": "بعد العصر", "jumuah": "بعد صلاة الجمعة", "maghrib": "بعد المغرب", "isha": "بعد العشاء" },
+  "days": [
+    { "k": "sat", "t": "السبت", "dow": 6, "slots": {
+      "fajr": { "items": [
+        { "pre": "شرح كتاب", "t": "حادي الأرواح إلى بلاد الأفراح", "by": "لابن القيم", "c": 919 },
+        { "pre": "شرح كتاب", "t": "فتح المجيد شرح كتاب التوحيد", "by": "للشيخ عبد الرحمن بن حسن آل الشيخ", "c": null },
+        { "pre": "شرح كتاب", "t": "الداء والدواء", "by": "لابن القيم", "c": 897 },
+        { "pre": "شرح كتاب", "t": "الآداب الشرعية", "by": "لابن مفلح", "c": 338 },
+        { "pre": "شرح كتاب", "t": "مختصر زاد المعاد", "by": "", "c": 839 },
+        { "pre": "شرح كتاب", "t": "نزهة النظر", "by": "للحافظ ابن حجر", "c": 754 },
+        { "pre": "شرح كتاب", "t": "نظم العمريطي على الورقات", "by": "", "c": 755 }
+      ] },
+      "asr": { "none": "لا يوجد درس" },
+      "maghrib": { "items": [ { "pre": "شرح", "t": "بلوغ المرام", "by": "لابن حجر العسقلاني", "c": 946 } ], "place": "rajhi" },
+      "isha": { "items": [ { "pre": "شرح", "t": "مسائل الجاهلية", "by": "للشيخ محمد بن عبد الوهاب", "c": 882 } ], "place": "rajhi" }
+    } },
+    { "k": "sun", "t": "الأحد", "dow": 0, "slots": {
+      "fajr": { "intro": "القراءة من", "items": [ { "t": "تفسير ابن كثير", "c": 16 }, { "pre": "ثم", "t": "مسند الإمام أحمد", "c": null } ], "then": "ثم الإجابة على الأسئلة الواردة" },
+      "asr": { "intro": "القراءة بالتناوب بين", "items": [
+        { "t": "جامع الأصول", "by": "لابن الأثير", "c": 18 },
+        { "t": "مجموع الفتاوى", "by": "لشيخ الإسلام ابن تيمية", "c": null },
+        { "t": "جامع بيان العلم وفضله", "by": "للحافظ ابن عبد البر", "c": 312 },
+        { "t": "آثار الصحابة في الفقه", "by": "لزكريا غلام", "c": 8 }
+      ] },
+      "maghrib": { "items": [ { "t": "لمعة الاعتقاد", "by": "لابن قدامة", "c": 938 }, { "t": "مسند الدارمي", "c": 612 } ], "place": "khadija" },
+      "isha": { "items": [ { "pre": "شرح", "t": "كتاب التوحيد", "c": 895 } ], "place": "khadija" }
+    } },
+    { "k": "mon", "t": "الاثنين", "dow": 1, "slots": {
+      "fajr": "@sun",
+      "asr": "@sun",
+      "maghrib": { "items": [ { "t": "سنن أبي داود", "c": 14 } ] },
+      "isha": { "items": [ { "t": "سنن النسائي", "c": 15 } ], "note": "بين الأذان والإقامة" }
+    } },
+    { "k": "tue", "t": "الثلاثاء", "dow": 2, "slots": {
+      "fajr": "@sun",
+      "asr": "@sun",
+      "maghrib": { "items": [ { "t": "صحيح الإمام مسلم", "c": 12 } ] },
+      "isha": { "items": [ { "t": "جامع الترمذي", "c": 842 } ], "note": "بين الأذان والإقامة" }
+    } },
+    { "k": "wed", "t": "الأربعاء", "dow": 3, "slots": {
+      "fajr": "@sun",
+      "asr": "@sun",
+      "maghrib": { "items": [ { "t": "صحيح البخاري", "c": 3 } ] },
+      "isha": { "items": [ { "t": "المورد العذب الزلال", "c": 901 } ], "place": "saud" }
+    } },
+    { "k": "thu", "t": "الخميس", "dow": 4, "slots": {
+      "fajr": "@sun",
+      "asr": "@sun",
+      "maghrib": { "items": [ { "t": "سنن الدارمي", "c": 612 } ], "place": "fahd" },
+      "isha": { "items": [ { "t": "الثلاثة الأصول", "c": 904 } ], "place": "fahd" }
+    } },
+    { "k": "fri", "t": "الجمعة", "dow": 5, "slots": {
+      "fajr": { "none": "لا يوجد" },
+      "jumuah": { "intro": "كلمة عامة مباشرة يليها قراءة من كتابي", "items": [
+        { "pre": "شرح", "t": "تذكرة السامع والمتكلم", "c": 428 },
+        { "pre": "شرح", "t": "أصول الاعتقاد", "by": "للالكائي", "c": 453 },
+        { "pre": "شرح", "t": "صفة الصلاة", "by": "للألباني", "c": 891 }
+      ] },
+      "maghrib": { "items": [ { "t": "عمدة الفقه", "by": "لابن قدامة المقدسي", "c": 911 } ], "place": "fahd-taif" },
+      "isha": { "items": [ { "t": "شرح السنة", "by": "للبربهاري", "c": 899 } ], "place": "fahd-taif" }
+    } }
+  ],
+  "monthly": { "t": "درس شهري من سبت كل أول أسبوع في شرح كتاب التوحيد بالمدينة النبوية", "place": "hijra", "c": 744 }
+}
